@@ -1,0 +1,69 @@
+<!-- debug.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>音频调试页面</title>
+</head>
+<body>
+    <h1>音频文件调试</h1>
+    <input type="text" id="userIdInput" placeholder="输入用户ID" />
+    <button onclick="testAudio()">测试音频</button>
+    
+    <div id="result"></div>
+    <audio id="testPlayer" controls></audio>
+    
+    <script>
+        const supabaseUrl = 'https://ysuzytkxvcoorpvsobqd.supabase.co';
+        
+        async function testAudio() {
+            const userId = document.getElementById('userIdInput').value;
+            const resultDiv = document.getElementById('result');
+            const player = document.getElementById('testPlayer');
+            
+            if (!userId) {
+                resultDiv.innerHTML = '<p style="color:red">请输入用户ID</p>';
+                return;
+            }
+            
+            // 测试不同的URL格式
+            const urls = [
+                `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.mp3`,
+                `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.mp3?t=${Date.now()}`,
+                `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.m4a`,
+                `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.m4a?download`,
+            ];
+            
+            resultDiv.innerHTML = `<h3>测试用户: ${userId}</h3>`;
+            
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i];
+                resultDiv.innerHTML += `<p>测试 ${i+1}: <a href="${url}" target="_blank">${url}</a> </p>`;
+                
+                try {
+                    const response = await fetch(url);
+                    resultDiv.innerHTML += `<p>状态码: ${response.status} ${response.statusText}</p>`;
+                    resultDiv.innerHTML += `<p>Content-Type: ${response.headers.get('content-type')}</p>`;
+                    resultDiv.innerHTML += `<p>文件大小: ${response.headers.get('content-length') || '未知'} bytes</p>`;
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        resultDiv.innerHTML += `<p>Blob 类型: ${blob.type}, 大小: ${blob.size} bytes</p>`;
+                        
+                        if (blob.type.startsWith('audio/')) {
+                            player.src = URL.createObjectURL(blob);
+                            resultDiv.innerHTML += '<p style="color:green">✓ 音频文件有效</p>';
+                        } else {
+                            resultDiv.innerHTML += '<p style="color:orange">⚠ 文件类型不是音频</p>';
+                        }
+                    }
+                } catch (error) {
+                    resultDiv.innerHTML += `<p style="color:red">✗ 请求失败: ${error.message}</p>`;
+                }
+                
+                resultDiv.innerHTML += '<hr>';
+            }
+        }
+    </script>
+</body>
+</html>

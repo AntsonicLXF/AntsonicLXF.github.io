@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>上传</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .error-container {
+            display: none;
+            text-align: center;
+        }
+
+        .error-content {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 60px 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .error-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .error-text {
+            color: #2d3436;
+            font-size: 1.2em;
+            line-height: 1.5;
+        }
+
+        .main-container {
+            display: none;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2d3436;
+            margin-bottom: 10px;
+            font-size: 1.8em;
+        }
+
+        /* 上传区域 */
+        .upload-section {
+            display: flex;
+            gap: 20px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .upload-box {
+            width: 200px;
+            height: 200px;
+            border: 3px dashed #6c5ce7;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+            position: relative;
+        }
+
+        .upload-box:hover {
+            background: #edf2f7;
+            transform: translateY(-3px);
+            border-color: #a29bfe;
+        }
+
+        .upload-box .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .upload-box p {
+            font-weight: bold;
+            color: #2d3436;
+            margin: 5px 0;
+        }
+
+        .upload-box small {
+            color: #636e72;
+            font-size: 0.85em;
+        }
+
+        /* 移动端按钮 - 重新设计 */
+        .mobile-action-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 1em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+        }
+
+        .mobile-action-btn.photo {
+            background: linear-gradient(135deg, #1e90ff, #3742fa);
+        }
+
+        /* 上传按钮 */
+        .generate-btn {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            border-radius: 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 20px auto;
+            display: block;
+            width: 250px;
+        }
+
+        .generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 92, 231, 0.3);
+        }
+
+        .generate-btn:disabled {
+            background: #b2bec3;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* 免责声明区域 */
+        .disclaimer-box {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: left;
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #6c757d;
+        }
+
+        .disclaimer-box h4 {
+            color: #dc3545;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .disclaimer-box ul {
+            padding-left: 20px;
+        }
+
+        .disclaimer-box li {
+            margin-bottom: 8px;
+        }
+
+        /* 成功提示 */
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid #c3e6cb;
+            display: none;
+        }
+
+        /* 预览区域 */
+        .upload-preview {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* 摄像头模态框 */
+        .camera-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .camera-modal video {
+            width: 100%;
+            max-width: 500px;
+            background: #000;
+            border-radius: 10px 10px 0 0;
+        }
+
+        .camera-controls {
+            width: 100%;
+            max-width: 500px;
+            background: #333;
+            padding: 20px;
+            border-radius: 0 0 10px 10px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .camera-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .capture-btn {
+            background: #ff4757;
+            color: white;
+            font-weight: bold;
+        }
+
+        .cancel-btn {
+            background: #747d8c;
+            color: white;
+        }
+
+        .switch-camera-btn {
+            background: #3742fa;
+            color: white;
+        }
+
+        /* 移动端预览容器 */
+        .mobile-preview-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .mobile-preview-container img {
+            max-width: 80px;
+            max-height: 80px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .mobile-preview-container .preview-text {
+            font-size: 0.9em;
+            color: #2d3436;
+            margin-bottom: 10px;
+        }
+
+        /* 移动端操作按钮容器 */
+        .mobile-action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .mobile-action-buttons button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            font-size: 0.9em;
+            cursor: pointer;
+            min-width: 80px;
+        }
+
+        .mobile-confirm-btn {
+            background: #00b894;
+            color: white;
+        }
+
+        .mobile-retry-btn {
+            background: #ff9f43;
+            color: white;
+        }
+
+        /* 移动端适配 - 修改音频和图片上传区域 */
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 20px;
+            }
+
+            .upload-section {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .upload-box {
+                width: 100%;
+                max-width: 250px;
+                height: 180px;
+            }
+
+            .generate-btn {
+                width: 100%;
+                max-width: 250px;
+            }
+
+            .camera-modal video {
+                max-width: 100%;
+            }
+
+            .camera-controls {
+                max-width: 100%;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .camera-btn {
+                width: 100%;
+            }
+
+            /* 移动端音频上传区域特殊样式 */
+            #audioUploadBox {
+                cursor: default;
+            }
+
+            #audioUploadBox .upload-placeholder {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                width: 100%;
+            }
+
+            /* 隐藏音频上传区域原来的图标和文字 */
+            #audioUploadBox .upload-placeholder .icon,
+            #audioUploadBox .upload-placeholder p:not(.record-text),
+            #audioUploadBox .upload-placeholder small {
+                display: none !important;
+            }
+
+            /* 放大麦克风图标并调整位置 */
+            #audioUploadBox .mic-icon-large {
+                font-size: 3em !important;
+                margin-bottom: 15px;
+                display: block !important;
+            }
+
+            /* 录制按钮样式 - 这是红色录音按钮 */
+            #audioUploadBox .mobile-action-btn {
+                margin-top: 0;
+                padding: 10px 20px;
+                font-size: 1em;
+                font-weight: bold;
+                border-radius: 25px;
+                width: 80%;
+                max-width: 180px;
+                justify-content: center;
+                background: linear-gradient(135deg, #ff4757, #ff3838);
+                box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+            }
+
+            /* 录制按钮文字样式 */
+            #audioUploadBox .record-text {
+                color: white;
+                font-size: 1em;
+                font-weight: bold;
+                margin: 0;
+            }
+
+            /* 移动端图片上传区域特殊样式 */
+            #imageUploadBox {
+                cursor: default;
+            }
+
+            #imageUploadBox .upload-placeholder {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                width: 100%;
+            }
+
+            /* 隐藏图片上传区域原来的图标和文字 */
+            #imageUploadBox .upload-placeholder .icon,
+            #imageUploadBox .upload-placeholder p:not(.camera-text),
+            #imageUploadBox .upload-placeholder small {
+                display: none !important;
+            }
+
+            /* 放大相机图标并调整位置 */
+            #imageUploadBox .camera-icon-large {
+                font-size: 3em !important;
+                margin-bottom: 15px;
+                display: block !important;
+            }
+
+            /* 图片上传区域拍照按钮 - 与录音按钮大小一致 */
+            #imageUploadBox .mobile-action-btn.photo {
+                margin-top: 0;
+                padding: 10px 20px;
+                font-size: 1em;
+                font-weight: bold;
+                border-radius: 25px;
+                width: 80%;
+                max-width: 180px;
+                justify-content: center;
+                box-shadow: 0 4px 12px rgba(30, 144, 255, 0.4);
+                background: linear-gradient(135deg, #1e90ff, #3742fa);
+            }
+
+            /* 拍照按钮文字样式 */
+            #imageUploadBox .camera-text {
+                color: white;
+                font-size: 1em;
+                font-weight: bold;
+                margin: 0;
+            }
+        }
+
+        /* 桌面端保持原有样式，但隐藏移动端按钮 */
+        @media (min-width: 769px) {
+            .mobile-action-btn {
+                display: none;
+            }
+
+            .mobile-preview-container {
+                display: none !important;
+            }
+
+            .mobile-action-buttons {
+                display: none !important;
+            }
+
+            /* 桌面端恢复音频上传区域原始样式 */
+            #audioUploadBox .upload-placeholder {
+                display: flex !important;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #audioUploadBox .upload-placeholder .icon,
+            #audioUploadBox .upload-placeholder p,
+            #audioUploadBox .upload-placeholder small {
+                display: block !important;
+            }
+
+            #audioUploadBox .mic-icon-large {
+                display: none !important;
+            }
+
+            /* 桌面端恢复图片上传区域原始样式 */
+            #imageUploadBox .upload-placeholder {
+                display: flex !important;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #imageUploadBox .upload-placeholder .icon,
+            #imageUploadBox .upload-placeholder p,
+            #imageUploadBox .upload-placeholder small {
+                display: block !important;
+            }
+
+            #imageUploadBox .camera-icon-large {
+                display: none !important;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.0/lame.min.js"></script>
+</head>
+
+<body>
+    <!-- 错误容器（验证失败时显示） -->
+    <div class="error-container" id="errorContainer">
+        <div class="error-content">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">
+                <p>无效的访问链接</p>
+                <p style="margin-top: 10px;">请通过正确的二维码进入本页面</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主容器（验证成功时显示） -->
+    <div class="main-container" id="mainContainer">
+        <h1>⬆️ 请上传你的声音和图片</h1>
+
+        <div class="upload-section" id="uploadSection">
+            <!-- 音频上传区域 -->
+            <div class="upload-box" id="audioUploadBox">
+                <input type="file" id="audioInput" accept="audio/*" hidden>
+                <div class="upload-placeholder">
+                    <!-- 桌面端显示的原始内容 -->
+                    <span class="icon">🎵</span>
+                    <p><strong>点击上传声音</strong></p>
+                    <small>支持 MP3, WAV, M4A 等格式</small>
+
+                    <!-- 移动端显示的麦克风图标 -->
+                    <span class="mic-icon-large" style="display: none;">🎤</span>
+                </div>
+                <div class="upload-preview" id="audioPreview">
+                    <span class="icon">✅</span>
+                    <p>声音文件已准备就绪</p>
+                    <small id="audioFileName"></small>
+                </div>
+                <!-- 移动端预览容器 -->
+                <div class="mobile-preview-container" id="audioMobilePreview">
+                    <span class="icon" style="font-size: 2.5em;">🎤</span>
+                    <div class="preview-text">已录制音频</div>
+                    <div class="mobile-action-buttons">
+                        <button class="mobile-retry-btn" onclick="retryAudioRecording()">重新录制</button>
+                        <button class="mobile-confirm-btn" onclick="confirmAudioRecording()">使用此音频</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图片上传区域 -->
+            <div class="upload-box" id="imageUploadBox">
+                <input type="file" id="imageInput" accept="image/*" hidden>
+                <div class="upload-placeholder">
+                    <!-- 桌面端显示的原始内容 -->
+                    <span class="icon">🖼️</span>
+                    <p><strong>点击上传图片</strong></p>
+                    <small>支持 JPG, PNG, GIF 等格式</small>
+
+                    <!-- 移动端显示的相机图标 -->
+                    <span class="camera-icon-large" style="display: none;">📷</span>
+                </div>
+                <div class="upload-preview" id="imagePreview">
+                    <img id="imageThumbnail" src="" alt="预览图"
+                        style="max-width: 100px; max-height: 100px; border-radius: 8px; margin-bottom: 10px;">
+                    <p>背景图片已准备就绪</p>
+                </div>
+                <!-- 移动端预览容器 -->
+                <div class="mobile-preview-container" id="imageMobilePreview">
+                    <img id="imageMobileThumbnail" src="" alt="预览图"
+                        style="max-width: 80px; max-height: 80px; border-radius: 8px; margin-bottom: 10px;">
+                    <div class="preview-text">已拍摄照片</div>
+                    <div class="mobile-action-buttons">
+                        <button class="mobile-retry-btn" onclick="retryPhotoCapture()">重新拍摄</button>
+                        <button class="mobile-confirm-btn" onclick="confirmPhotoCapture()">使用此照片</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button id="uploadBtn" class="generate-btn" disabled>
+            请先选择声音或图片
+        </button>
+
+        <div class="disclaimer-box">
+            <h4>📜 用户行为规范与免责声明</h4>
+            <ul>
+                <li>您承诺上传的内容均为合法、正面的个人表达。</li>
+                <li><strong>严禁上传任何</strong>涉及恐怖、威胁、勒索、诽谤、骚扰等违法或侵害他人权益的音频内容。</li>
+                <li><strong>严禁上传任何</strong>色情、暴力、血腥、令人极度不适或违反公序良俗的图片内容。</li>
+                <li>我们有权对上传内容进行审查。一经发现违规内容，<strong>将立即删除相关文件，并永久终止该用户的所有服务，且保留追究法律责任的权利。</strong></li>
+                <li>您应单独对上传内容负责。因内容违规引发的任何责任，均由您自行承担。</li>
+            </ul>
+        </div>
+
+        <!-- 成功提示区域 -->
+        <div id="successMessage" class="success-message">
+            <h3>✅ 上传成功！</h3>
+            <p id="successDetails">你的文件已保存。</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">页面将在1.5秒后刷新...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // ===== 配置区域 =====
+        const SUPABASE_URL = 'https://ysuzytkxvcoorpvsobqd.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzdXp5dGt4dmNvb3JwdnNvYnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyOTMxMjUsImV4cCI6MjA3OTg2OTEyNX0.mcHqTQmeBFpW8NCCDCAauWAkjNvzOLiGQN5WAhrNC_A';
+
+        // 从URL参数获取管理员分配好的用户ID
+        const urlParams = new URLSearchParams(window.location.search);
+        const assignedUserId = urlParams.get('user');
+
+        // DOM 元素
+        const errorContainer = document.getElementById('errorContainer');
+        const mainContainer = document.getElementById('mainContainer');
+        const audioInput = document.getElementById('audioInput');
+        const imageInput = document.getElementById('imageInput');
+        const audioUploadBox = document.getElementById('audioUploadBox');
+        const imageUploadBox = document.getElementById('imageUploadBox');
+        const audioPreview = document.getElementById('audioPreview');
+        const imagePreview = document.getElementById('imagePreview');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const successMessage = document.getElementById('successMessage');
+        const successDetails = document.getElementById('successDetails');
+        const audioMobilePreview = document.getElementById('audioMobilePreview');
+        const imageMobilePreview = document.getElementById('imageMobilePreview');
+        const imageMobileThumbnail = document.getElementById('imageMobileThumbnail');
+
+        // 状态变量
+        let selectedAudio = null;
+        let selectedImage = null;
+        let supabaseClient = null;
+
+        // === 录音功能相关变量 ===
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordTimeout = null;
+        const MAX_RECORD_TIME = 60000;
+        let currentRecordedAudioBlob = null;
+        let currentAudioStream = null; // 新增：跟踪当前音频流
+
+        // === 拍照功能相关变量 ===
+        let cameraStream = null;
+        let currentCameraMode = 'environment';
+        let currentCapturedPhotoBlob = null;
+
+        // ==================== iOS Safari 检测函数 ====================
+        function isIOS() {
+            const ua = navigator.userAgent;
+            return /iPhone|iPad|iPod/i.test(ua) &&
+                /Safari/i.test(ua) &&
+                !/CriOS/i.test(ua) &&
+                !/FxiOS/i.test(ua);
+        }
+
+        // ==================== iOS 媒体会话管理器 ====================
+        const iOSMediaSession = {
+            isActive: false,
+            hasPermission: false,
+            isPageActive: true,
+
+            init() {
+                if (!isIOS()) return;
+
+                console.log('📱 初始化iOS媒体会话管理器');
+
+                // 跟踪页面可见性
+                document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
+
+                // 跟踪页面卸载
+                window.addEventListener('pagehide', this.cleanup.bind(this));
+                window.addEventListener('beforeunload', this.cleanup.bind(this));
+
+                // 在页面显示时重置状态
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        this.isPageActive = false;
+                        this.cleanup();
+                    } else {
+                        this.isPageActive = true;
+                        // 页面重新显示时，重置录音按钮状态
+                        const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
+                        if (recordBtn && recordBtn.textContent.includes('录音中')) {
+                            recordBtn.textContent = '录制声音';
+                            isRecording = false;
+                        }
+                    }
+                });
+            },
+
+            handleVisibilityChange() {
+                if (document.hidden) {
+                    console.log('📱 页面隐藏，清理媒体资源');
+                    this.cleanup();
+                } else {
+                    console.log('📱 页面显示，重置状态');
+                    // 重置录音状态
+                    if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                        isRecording = false;
+                    }
+                }
+            },
+
+            async requestPermission() {
+                if (!isIOS()) return true;
+
+                try {
+                    // iOS Safari 需要明确的用户交互才能请求权限
+                    // 我们创建一个临时的音频上下文来触发权限请求
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    const audioContext = new AudioContext();
+
+                    // 在iOS上，需要用户交互后才能创建音频上下文
+                    if (audioContext.state === 'suspended') {
+                        console.log('📱 音频上下文被挂起，等待用户交互');
+                        // 我们将在用户点击录音按钮时再处理
+                    }
+
+                    audioContext.close();
+                    this.hasPermission = true;
+                    return true;
+                } catch (error) {
+                    console.warn('iOS权限请求失败:', error);
+                    return false;
+                }
+            },
+
+            cleanup() {
+                if (!isIOS()) return;
+
+                console.log('🧹 iOS媒体会话清理');
+
+                // 清理媒体录制器
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    try {
+                        mediaRecorder.stop();
+                        console.log('✅ 停止媒体录制器');
+                    } catch (e) {
+                        console.warn('停止媒体录制器失败:', e);
+                    }
+                    mediaRecorder = null;
+                }
+
+                // 清理音频流
+                if (currentAudioStream) {
+                    currentAudioStream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log('✅ 停止音频轨道');
+                    });
+                    currentAudioStream = null;
+                }
+
+                // 清理摄像头流
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log('✅ 停止摄像头轨道');
+                    });
+                    cameraStream = null;
+                }
+
+                // 清理超时
+                if (recordTimeout) {
+                    clearTimeout(recordTimeout);
+                    recordTimeout = null;
+                }
+
+                // 重置状态
+                isRecording = false;
+                audioChunks = [];
+                this.isActive = false;
+
+                // 强制释放内存（针对iOS的优化）
+                if (isIOS()) {
+                    setTimeout(() => {
+                        try {
+                            // 创建一个大的临时对象来触发垃圾回收
+                            const temp = new ArrayBuffer(1024 * 1024 * 2);
+                            setTimeout(() => {
+                                temp = null;
+                            }, 100);
+                        } catch (e) {
+                            // 忽略内存错误
+                        }
+                    }, 500);
+                }
+            },
+
+            // 检查是否可以开始录音
+            async canStartRecording() {
+                if (!isIOS()) return true;
+
+                // 如果当前有活动会话，先清理
+                if (this.isActive) {
+                    this.cleanup();
+                    // 给iOS一点时间清理资源
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+
+                // 检查页面是否活跃
+                if (!this.isPageActive || document.hidden) {
+                    console.warn('📱 页面不活跃，不能开始录音');
+                    return false;
+                }
+
+                return true;
+            }
+        };
+
+        // ==================== iOS Safari 专用音频录制方案 ====================
+        class iOSAudioRecorder {
+            constructor() {
+                this.stream = null;
+                this.recorder = null;
+                this.chunks = [];
+                this.isRecording = false;
+            }
+
+            async start() {
+                if (!isIOS()) return false;
+
+                console.log('🎤 开始iOS专用录音流程');
+
+                try {
+                    // 1. 先清理可能存在的旧会话
+                    iOSMediaSession.cleanup();
+                    await new Promise(resolve => setTimeout(resolve, 200));
+
+                    // 2. 创建新的音频上下文（必须在用户交互后）
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    const audioContext = new AudioContext();
+
+                    // 3. 获取用户媒体（使用详细配置）
+                    const constraints = {
+                        audio: {
+                            channelCount: 1,
+                            sampleRate: 44100,
+                            echoCancellation: false, // iOS上关闭回声消除可能有更好效果
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        }
+                    };
+
+                    console.log('📱 请求麦克风权限...');
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    this.stream = stream;
+                    currentAudioStream = stream;
+
+                    console.log('✅ 获得麦克风权限，轨道状态:',
+                        stream.getAudioTracks().map(t => `${t.kind}:${t.readyState}`));
+
+                    // 4. 检查轨道是否可用
+                    const audioTracks = stream.getAudioTracks();
+                    if (audioTracks.length === 0 || audioTracks[0].readyState !== 'live') {
+                        throw new Error('音频轨道不可用');
+                    }
+
+                    // 5. 创建MediaRecorder
+                    let options = {};
+
+                    // 尝试不同的MIME类型，找到iOS支持的
+                    if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                        options.mimeType = 'audio/mp4; codecs=mp4a.40.2';
+                        console.log('📱 使用audio/mp4格式');
+                    } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+                        options.mimeType = 'audio/aac';
+                        console.log('📱 使用audio/aac格式');
+                    } else {
+                        // 回退到默认
+                        console.log('📱 使用默认音频格式');
+                    }
+
+                    // 设置较低的音频比特率，减少iOS处理压力
+                    if (options.mimeType) {
+                        options.audioBitsPerSecond = 64000; // 64kbps
+                    }
+
+                    this.recorder = new MediaRecorder(stream, options);
+                    this.chunks = [];
+
+                    // 6. 设置事件处理器
+                    this.recorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            this.chunks.push(event.data);
+                            console.log('📦 收到音频数据块:', event.data.size, 'bytes');
+                        }
+                    };
+
+                    this.recorder.onstop = () => {
+                        console.log('⏹️ iOS录音停止，数据块数量:', this.chunks.length);
+
+                        if (this.chunks.length === 0) {
+                            console.error('❌ 没有录到音频数据');
+                            // 尝试备用方案：重新获取权限
+                            this.retryWithFallback();
+                            return;
+                        }
+
+                        const audioBlob = new Blob(this.chunks, {
+                            type: this.recorder.mimeType || 'audio/webm'
+                        });
+
+                        console.log('🎵 录音完成，大小:', audioBlob.size, 'bytes');
+
+                        if (audioBlob.size === 0) {
+                            console.error('❌ 录音数据为空');
+                            alert('录音失败，没有录到声音。请重试。');
+                            return;
+                        }
+
+                        // 保存录音
+                        currentRecordedAudioBlob = audioBlob;
+                        showAudioMobilePreview();
+
+                        // 清理流
+                        this.cleanupStream();
+                    };
+
+                    this.recorder.onerror = (event) => {
+                        console.error('🎤 录音错误:', event.error);
+                        alert('录音出错: ' + event.error.message);
+                        this.isRecording = false;
+
+                        // 清理并重试
+                        this.cleanup();
+                        this.retryWithFallback();
+                    };
+
+                    // 7. 开始录音
+                    this.recorder.start(250); // 每250ms收集一次数据
+                    this.isRecording = true;
+                    iOSMediaSession.isActive = true;
+
+                    console.log('✅ iOS录音开始成功，MIME类型:', this.recorder.mimeType);
+                    return true;
+
+                } catch (error) {
+                    console.error('🎤 iOS录音启动失败:', error);
+
+                    // 提供具体的错误提示
+                    if (error.name === 'NotAllowedError') {
+                        alert('麦克风权限被拒绝。请前往「设置」>「Safari浏览器」>「麦克风」，允许此网站使用麦克风。');
+                    } else if (error.name === 'NotFoundError') {
+                        alert('未找到麦克风设备。请检查设备麦克风是否正常。');
+                    } else if (error.name === 'NotReadableError') {
+                        alert('麦克风正被其他应用占用。请关闭其他使用麦克风的应用后重试。');
+                    } else if (error.name === 'AbortError') {
+                        // iOS Safari特定的中止错误，通常是因为页面切换
+                        alert('录音被中断。请保持在当前页面完成录音。');
+                    } else {
+                        alert('无法访问麦克风: ' + error.message);
+                    }
+
+                    this.cleanup();
+                    return false;
+                }
+            }
+
+            stop() {
+                if (this.recorder && this.recorder.state === 'recording') {
+                    this.recorder.stop();
+                    this.isRecording = false;
+                    iOSMediaSession.isActive = false;
+                }
+            }
+
+            cleanup() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log('✅ 停止轨道:', track.kind);
+                    });
+                    this.stream = null;
+                    currentAudioStream = null;
+                }
+
+                if (this.recorder) {
+                    if (this.recorder.state === 'recording') {
+                        this.recorder.stop();
+                    }
+                    this.recorder = null;
+                }
+
+                this.chunks = [];
+                this.isRecording = false;
+                iOSMediaSession.isActive = false;
+            }
+
+            cleanupStream() {
+                // 延迟清理流，避免立即停止导致数据丢失
+                setTimeout(() => {
+                    if (this.stream) {
+                        this.stream.getTracks().forEach(track => track.stop());
+                        this.stream = null;
+                        currentAudioStream = null;
+                    }
+                }, 500);
+            }
+
+            async retryWithFallback() {
+                console.log('🔄 尝试备用录音方案...');
+
+                // 尝试使用更简单的配置
+                try {
+                    this.cleanup();
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    const simpleStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
+
+                    // 创建简单的录音器
+                    const simpleRecorder = new MediaRecorder(simpleStream);
+                    const chunks = [];
+
+                    simpleRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) chunks.push(event.data);
+                    };
+
+                    simpleRecorder.onstop = () => {
+                        if (chunks.length > 0) {
+                            const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+                            currentRecordedAudioBlob = audioBlob;
+                            showAudioMobilePreview();
+                        }
+                        simpleStream.getTracks().forEach(t => t.stop());
+                    };
+
+                    simpleRecorder.start();
+
+                    // 录制3秒后自动停止
+                    setTimeout(() => {
+                        if (simpleRecorder.state === 'recording') {
+                            simpleRecorder.stop();
+                        }
+                    }, 3000);
+
+                    console.log('✅ 备用录音方案启动');
+                    return true;
+                } catch (error) {
+                    console.error('备用方案也失败了:', error);
+                    return false;
+                }
+            }
+        }
+
+        // 创建iOS录音器实例
+        const iOSRecorder = new iOSAudioRecorder();
+
+        // ==================== 简化版音频转换函数 ====================
+        async function convertAudioToMP3(audioFile) {
+            console.log('🎵 开始音频转换:', audioFile.name);
+
+            // iOS设备直接使用原始文件，避免转换问题
+            if (isIOS()) {
+                console.log('📱 iOS设备，跳过复杂转换');
+
+                // 检查文件类型，如果是iOS录制的格式，直接返回
+                if (audioFile.type.includes('m4a') || audioFile.type.includes('mp4')) {
+                    console.log('📱 使用iOS原始音频文件');
+                    return audioFile;
+                }
+
+                // 如果不是MP3格式，转换为MP3
+                if (!audioFile.type.includes('mpeg')) {
+                    console.log('📱 iOS非MP3文件，进行简单转换');
+                    try {
+                        const arrayBuffer = await audioFile.arrayBuffer();
+                        const mp3Blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+                        const convertedFile = new File([mp3Blob], `audio_${assignedUserId}.mp3`, {
+                            type: 'audio/mpeg',
+                            lastModified: Date.now()
+                        });
+                        return convertedFile;
+                    } catch (error) {
+                        console.error('iOS简单转换失败:', error);
+                        return audioFile;
+                    }
+                }
+                return audioFile;
+            }
+
+            // 非iOS设备使用原有转换逻辑
+            try {
+                const arrayBuffer = await audioFile.arrayBuffer();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                const sampleRate = Math.min(44100, audioBuffer.sampleRate);
+                const bitRate = 128;
+                const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, bitRate);
+
+                const channelData = audioBuffer.getChannelData(0);
+                const sampleBlockSize = 1152;
+                let mp3Data = [];
+
+                const convertBuffer = (input) => {
+                    const len = input.length;
+                    const output = new Int16Array(len);
+                    for (let i = 0; i < len; i++) {
+                        const s = Math.max(-1, Math.min(1, input[i]));
+                        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    return output;
+                };
+
+                for (let i = 0; i < channelData.length; i += sampleBlockSize) {
+                    const chunk = channelData.subarray(i, i + sampleBlockSize);
+                    const int16Data = convertBuffer(chunk);
+                    const mp3Chunk = mp3Encoder.encodeBuffer(int16Data);
+                    if (mp3Chunk.length > 0) {
+                        mp3Data.push(new Int8Array(mp3Chunk));
+                    }
+                }
+
+                const finalChunk = mp3Encoder.flush();
+                if (finalChunk.length > 0) {
+                    mp3Data.push(new Int8Array(finalChunk));
+                }
+
+                const totalLength = mp3Data.reduce((acc, chunk) => acc + chunk.length, 0);
+                const mergedArray = new Int8Array(totalLength);
+                let offset = 0;
+                for (const chunk of mp3Data) {
+                    mergedArray.set(chunk, offset);
+                    offset += chunk.length;
+                }
+
+                const mp3Blob = new Blob([mergedArray.buffer], { type: 'audio/mpeg' });
+                const convertedFile = new File([mp3Blob], `audio_${assignedUserId}.mp3`, {
+                    type: 'audio/mpeg',
+                    lastModified: Date.now()
+                });
+
+                console.log('✅ 音频转换成功！大小:', (convertedFile.size / 1024).toFixed(2), 'KB');
+                return convertedFile;
+
+            } catch (error) {
+                console.error('音频转换失败:', error);
+
+                // 备用方案：直接使用原始文件
+                const safeFile = new File([audioFile], `audio_${assignedUserId}_original.${audioFile.name.split('.').pop() || 'webm'}`, {
+                    type: audioFile.type,
+                    lastModified: Date.now()
+                });
+
+                return safeFile;
+            }
+        }
+
+        // ==================== 标准音频转换函数 ====================
+        async function convertAudioToMP3(audioFile) {
+            if (isIOS()) {
+                return await convertAudioToMP3_iOS(audioFile);
+            }
+
+            // 非iOS设备使用标准转换逻辑
+            console.log('开始标准音频转换:', audioFile.name, '类型:', audioFile.type);
+
+            try {
+                const arrayBuffer = await audioFile.arrayBuffer();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                window.mediaResources.audioContexts.push(audioContext);
+
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                const sampleRate = Math.min(44100, audioBuffer.sampleRate);
+                const bitRate = 128;
+                const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, bitRate);
+
+                const channelData = audioBuffer.getChannelData(0);
+                const sampleBlockSize = 1152;
+                let mp3Data = [];
+
+                // 转换为 Int16Array
+                const convertBuffer = (input) => {
+                    const len = input.length;
+                    const output = new Int16Array(len);
+                    for (let i = 0; i < len; i++) {
+                        const s = Math.max(-1, Math.min(1, input[i]));
+                        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    return output;
+                };
+
+                for (let i = 0; i < channelData.length; i += sampleBlockSize) {
+                    const chunk = channelData.subarray(i, i + sampleBlockSize);
+                    const int16Data = convertBuffer(chunk);
+                    const mp3Chunk = mp3Encoder.encodeBuffer(int16Data);
+                    if (mp3Chunk.length > 0) {
+                        mp3Data.push(new Int8Array(mp3Chunk));
+                    }
+                }
+
+                const finalChunk = mp3Encoder.flush();
+                if (finalChunk.length > 0) {
+                    mp3Data.push(new Int8Array(finalChunk));
+                }
+
+                const totalLength = mp3Data.reduce((acc, chunk) => acc + chunk.length, 0);
+                const mergedArray = new Int8Array(totalLength);
+                let offset = 0;
+                for (const chunk of mp3Data) {
+                    mergedArray.set(chunk, offset);
+                    offset += chunk.length;
+                }
+
+                const mp3Blob = new Blob([mergedArray.buffer], { type: 'audio/mpeg' });
+                const convertedFile = new File([mp3Blob], `audio_${assignedUserId}.mp3`, {
+                    type: 'audio/mpeg',
+                    lastModified: Date.now()
+                });
+
+                console.log('✅ 音频转换成功！采样率:', sampleRate, 'Hz, 大小:',
+                    (convertedFile.size / 1024).toFixed(2), 'KB');
+
+                // 关闭 AudioContext
+                try {
+                    if (audioContext.state !== 'closed') {
+                        await audioContext.close();
+                        window.mediaResources.audioContexts = window.mediaResources.audioContexts.filter(ctx => ctx !== audioContext);
+                    }
+                } catch (e) {
+                    console.warn('关闭 AudioContext 失败:', e);
+                }
+
+                return convertedFile;
+
+            } catch (error) {
+                console.error('音频转换失败:', error);
+
+                // 备用方案：直接上传原始文件
+                const safeFile = new File([audioFile], `audio_${assignedUserId}_original.${audioFile.name.split('.').pop() || 'webm'}`, {
+                    type: audioFile.type,
+                    lastModified: Date.now()
+                });
+
+                return safeFile;
+            }
+        }
+
+        // ==================== 安全验证和页面初始化 ====================
+        window.addEventListener('DOMContentLoaded', async function () {
+            // 安全校验
+            if (!assignedUserId || !assignedUserId.startsWith('user_')) {
+                console.error('无效的用户ID参数:', assignedUserId);
+                errorContainer.style.display = 'block';
+                mainContainer.style.display = 'none';
+                return;
+            }
+
+            // 验证通过，显示主容器，隐藏错误容器
+            errorContainer.style.display = 'none';
+            mainContainer.style.display = 'block';
+
+            console.log('当前操作用户ID:', assignedUserId);
+
+            // 初始化 Supabase 客户端
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+            // iOS专用初始化
+            if (isIOS()) {
+                console.log('📱 iOS Safari 设备检测到');
+                iOSMediaSession.init();
+
+                // 添加iOS专用样式
+                const style = document.createElement('style');
+                style.textContent = `
+            @media (max-width: 768px) {
+                #audioUploadBox {
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                #audioUploadBox .mobile-action-btn {
+                    position: relative;
+                    z-index: 10;
+                }
+                
+                /* 禁用iOS的默认行为 */
+                * {
+                    -webkit-tap-highlight-color: transparent;
+                }
+                
+                /* 优化按钮响应 */
+                .mobile-action-btn:active {
+                    transform: scale(0.98);
+                }
+            }
+        `;
+                document.head.appendChild(style);
+            }
+
+            // 继续正常初始化
+            checkUploadButton();
+            initRecordingUI();
+            initCameraUI();
+
+            // 绑定事件监听器
+            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            if (!isMobile) {
+                // 桌面端保留原有功能
+                audioUploadBox.addEventListener('click', () => audioInput.click());
+                imageUploadBox.addEventListener('click', () => imageInput.click());
+            }
+
+            audioInput.addEventListener('change', handleAudioSelect);
+            imageInput.addEventListener('change', handleImageSelect);
+            uploadBtn.addEventListener('click', handleUpload);
+
+            // 添加iOS页面状态监听
+            if (isIOS()) {
+                // 当页面重新显示时，清理可能的残留状态
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) {
+                        // 页面重新显示，重置录音按钮状态
+                        const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
+                        if (recordBtn) {
+                            recordBtn.textContent = '录制声音';
+                        }
+                        isRecording = false;
+                    }
+                });
+            }
+        });
+
+        // ==================== 核心功能函数 ====================
+
+        // 处理音频选择
+        function handleAudioSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('audio/')) {
+                selectedAudio = file;
+                document.getElementById('audioFileName').textContent = file.name;
+                audioPreview.style.display = 'flex';
+                audioUploadBox.querySelector('.upload-placeholder').style.display = 'none';
+
+                // 移动端隐藏移动预览
+                audioMobilePreview.style.display = 'none';
+
+                checkUploadButton();
+            } else {
+                alert('请选择一个有效的音频文件。');
+            }
+        }
+
+        // 处理图片选择
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                processImageFile(file);
+            } else {
+                alert('请选择一个有效的图片文件。');
+            }
+        }
+
+        // 处理图片文件
+        function processImageFile(file) {
+            selectedImage = file;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                document.getElementById('imageThumbnail').src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            imagePreview.style.display = 'flex';
+            imageUploadBox.querySelector('.upload-placeholder').style.display = 'none';
+
+            // 移动端隐藏移动预览
+            imageMobilePreview.style.display = 'none';
+
+            checkUploadButton();
+        }
+
+        // 检查上传按钮状态
+        function checkUploadButton() {
+            uploadBtn.disabled = !(selectedAudio || selectedImage);
+
+            if (selectedAudio && selectedImage) {
+                uploadBtn.textContent = '上传声音与图片';
+                uploadBtn.style.background = 'linear-gradient(135deg, #fd79a8, #e84393)';
+            } else if (selectedAudio) {
+                uploadBtn.textContent = '仅上传声音';
+                uploadBtn.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
+            } else if (selectedImage) {
+                uploadBtn.textContent = '仅上传图片';
+                uploadBtn.style.background = 'linear-gradient(135deg, #00b894, #00cec9)';
+            } else {
+                uploadBtn.textContent = '请先选择声音或图片';
+                uploadBtn.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
+            }
+        }
+
+        // ==================== 移动端录音功能 ====================
+
+        // 初始化录音UI
+        function initRecordingUI() {
+            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+            if (isMobile) {
+                const audioPlaceholder = document.querySelector('#audioUploadBox .upload-placeholder');
+                if (audioPlaceholder) {
+                    // 移动端：隐藏原始内容，显示麦克风图标
+                    audioPlaceholder.querySelector('.icon').style.display = 'none';
+                    audioPlaceholder.querySelector('p').style.display = 'none';
+                    audioPlaceholder.querySelector('small').style.display = 'none';
+
+                    // 显示放大的麦克风图标
+                    const micIconLarge = audioPlaceholder.querySelector('.mic-icon-large');
+                    if (micIconLarge) {
+                        micIconLarge.style.display = 'block';
+                    }
+
+                    // 创建录制按钮
+                    const recordBtn = document.createElement('button');
+                    recordBtn.className = 'mobile-action-btn';
+
+                    // 创建按钮内容
+                    const btnContent = document.createElement('span');
+                    btnContent.className = 'record-text';
+                    btnContent.textContent = '录制声音';
+
+                    recordBtn.appendChild(btnContent);
+                    recordBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        toggleRecording();
+                    };
+
+                    audioPlaceholder.appendChild(recordBtn);
+
+                    // 移动端禁用音频上传区域的点击事件（只允许录制按钮）
+                    audioUploadBox.style.cursor = 'default';
+                }
+            }
+        }
+
+        // 录音控制函数
+        async function toggleRecording() {
+            if (!isRecording) {
+                if (isIOS()) {
+                    // iOS专用录音流程
+                    console.log('📱 iOS录音开始');
+
+                    // 更新按钮状态
+                    const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
+                    if (recordBtn) {
+                        recordBtn.textContent = '准备中...';
+                    }
+
+                    // 检查iOS会话状态
+                    if (!(await iOSMediaSession.canStartRecording())) {
+                        alert('当前无法开始录音，请确保页面完全显示并保持活跃。');
+                        if (recordBtn) {
+                            recordBtn.textContent = '录制声音';
+                        }
+                        return;
+                    }
+
+                    // 短暂延迟，确保UI更新
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // 使用iOS专用录音器
+                    const success = await iOSRecorder.start();
+
+                    if (success) {
+                        isRecording = true;
+                        if (recordBtn) {
+                            recordBtn.textContent = '⏺️ 录音中... 点击停止';
+                        }
+
+                        // 设置最大录音时间
+                        recordTimeout = setTimeout(() => {
+                            if (iOSRecorder.isRecording) {
+                                console.log('⏱️ 达到最大录音时间');
+                                iOSRecorder.stop();
+                                isRecording = false;
+                                if (recordBtn) {
+                                    recordBtn.textContent = '录制声音';
+                                }
+                            }
+                        }, MAX_RECORD_TIME);
+                    } else {
+                        if (recordBtn) {
+                            recordBtn.textContent = '录制声音';
+                        }
+                    }
+                    return;
+                }
+
+                // 非iOS设备的录音逻辑
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    currentAudioStream = stream;
+
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        currentRecordedAudioBlob = audioBlob;
+                        showAudioMobilePreview();
+                        stream.getTracks().forEach(track => track.stop());
+                        currentAudioStream = null;
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+
+                    // 更新录制按钮状态
+                    const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
+                    if (recordBtn) {
+                        recordBtn.textContent = '⏺️ 录音中... 点击停止';
+                    }
+
+                    recordTimeout = setTimeout(() => {
+                        if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                            isRecording = false;
+                            clearTimeout(recordTimeout);
+
+                            // 恢复按钮状态
+                            if (recordBtn) {
+                                recordBtn.textContent = '录制声音';
+                            }
+                        }
+                    }, MAX_RECORD_TIME);
+
+                } catch (error) {
+                    console.error('无法访问麦克风:', error);
+                    alert('无法访问麦克风，请检查浏览器权限设置。');
+                }
+            } else {
+                // 停止录音
+                if (isIOS()) {
+                    iOSRecorder.stop();
+                } else if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+
+                isRecording = false;
+                if (recordTimeout) {
+                    clearTimeout(recordTimeout);
+                    recordTimeout = null;
+                }
+
+                // 恢复按钮状态
+                const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
+                if (recordBtn) {
+                    recordBtn.textContent = '录制声音';
+                }
+            }
+        }
+
+        // 显示音频移动端预览
+        function showAudioMobilePreview() {
+            const audioPlaceholder = document.querySelector('#audioUploadBox .upload-placeholder');
+            audioPlaceholder.style.display = 'none';
+            audioPreview.style.display = 'none';
+            audioMobilePreview.style.display = 'flex';
+        }
+
+        // 重新录制音频
+        function retryAudioRecording() {
+            // 隐藏移动预览
+            audioMobilePreview.style.display = 'none';
+
+            // 显示原始按钮
+            const audioPlaceholder = document.querySelector('#audioUploadBox .upload-placeholder');
+            audioPlaceholder.style.display = 'flex';
+
+            // 重置状态
+            if (isIOS()) {
+                iOSRecorder.cleanup();
+            }
+            currentRecordedAudioBlob = null;
+            selectedAudio = null;
+            checkUploadButton();
+        }
+
+        // 确认使用录制的音频
+        async function confirmAudioRecording() {
+            if (!currentRecordedAudioBlob) {
+                alert('请先录制音频');
+                return;
+            }
+
+            // 将录制的音频转换为文件
+            const recordedFile = new File([currentRecordedAudioBlob], `recording_${Date.now()}.${isIOS() ? 'm4a' : 'webm'}`, {
+                type: isIOS() ? 'audio/mp4' : 'audio/webm'
+            });
+
+            // 处理音频选择
+            handleAudioSelect({ target: { files: [recordedFile] } });
+        }
+
+        // ==================== 移动端拍照功能 ====================
+        // （保持原有代码，但添加iOS优化）
+        function initCameraUI() {
+            const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+            if (isMobile) {
+                const imagePlaceholder = document.querySelector('#imageUploadBox .upload-placeholder');
+                if (imagePlaceholder) {
+                    // 移动端：隐藏原始内容，显示相机图标
+                    imagePlaceholder.querySelector('.icon').style.display = 'none';
+                    imagePlaceholder.querySelector('p').style.display = 'none';
+                    imagePlaceholder.querySelector('small').style.display = 'none';
+
+                    // 显示放大的相机图标
+                    const cameraIconLarge = imagePlaceholder.querySelector('.camera-icon-large');
+                    if (cameraIconLarge) {
+                        cameraIconLarge.style.display = 'block';
+                    }
+
+                    // 创建拍照按钮
+                    const cameraBtn = document.createElement('button');
+                    cameraBtn.className = 'mobile-action-btn photo';
+
+                    // 创建按钮内容
+                    const btnContent = document.createElement('span');
+                    btnContent.className = 'camera-text';
+                    btnContent.textContent = '拍照上传';
+
+                    cameraBtn.appendChild(btnContent);
+                    cameraBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openCamera();
+                    };
+
+                    imagePlaceholder.appendChild(cameraBtn);
+
+                    // 移动端禁用图片上传区域的点击事件（只允许拍照按钮）
+                    imageUploadBox.style.cursor = 'default';
+                }
+            }
+        }
+
+        // 打开摄像头（添加iOS优化）
+        async function openCamera() {
+            try {
+                // iOS设备先清理可能存在的媒体会话
+                if (isIOS()) {
+                    iOSMediaSession.cleanup();
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+
+                // 默认使用后置摄像头
+                currentCameraMode = 'environment';
+
+                await startCamera(currentCameraMode);
+
+            } catch (error) {
+                console.error('无法访问摄像头:', error);
+                alert('无法访问摄像头，请检查浏览器权限设置。');
+            }
+        }
+
+        // 启动摄像头（保持原有代码）
+        async function startCamera(cameraMode) {
+            // 如果已经有视频流，先停止
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: cameraMode },
+                    audio: false
+                });
+
+                const cameraModal = document.createElement('div');
+                cameraModal.className = 'camera-modal';
+
+                const video = document.createElement('video');
+                video.srcObject = cameraStream;
+                video.autoplay = true;
+                video.playsInline = true;
+
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'camera-controls';
+
+                // 拍照按钮
+                const captureBtn = document.createElement('button');
+                captureBtn.innerHTML = '📸 拍照';
+                captureBtn.className = 'camera-btn capture-btn';
+
+                // 切换摄像头按钮
+                const switchBtn = document.createElement('button');
+                switchBtn.innerHTML = currentCameraMode === 'environment' ? '🔄 前置摄像头' : '🔄 后置摄像头';
+                switchBtn.className = 'camera-btn switch-camera-btn';
+
+                // 取消按钮
+                const cancelBtn = document.createElement('button');
+                cancelBtn.innerHTML = '取消';
+                cancelBtn.className = 'camera-btn cancel-btn';
+
+                // 添加按钮到容器
+                buttonContainer.appendChild(captureBtn);
+                buttonContainer.appendChild(switchBtn);
+                buttonContainer.appendChild(cancelBtn);
+
+                // 添加到模态框
+                cameraModal.appendChild(video);
+                cameraModal.appendChild(buttonContainer);
+                document.body.appendChild(cameraModal);
+
+                // 拍照按钮点击事件
+                captureBtn.onclick = () => capturePhoto(video, cameraModal);
+
+                // 切换摄像头按钮点击事件
+                switchBtn.onclick = () => {
+                    // 切换摄像头模式
+                    currentCameraMode = currentCameraMode === 'environment' ? 'user' : 'environment';
+                    switchBtn.innerHTML = currentCameraMode === 'environment' ? '🔄 前置摄像头' : '🔄 后置摄像头';
+
+                    // 重新启动摄像头
+                    startCamera(currentCameraMode).then(() => {
+                        // 更新视频源
+                        video.srcObject = cameraStream;
+
+                        // 移除旧的模态框
+                        if (cameraModal && cameraModal.parentNode) {
+                            cameraModal.parentNode.removeChild(cameraModal);
+                        }
+                    });
+                };
+
+                // 取消按钮点击事件
+                cancelBtn.onclick = () => closeCamera(cameraModal);
+
+            } catch (error) {
+                console.error('启动摄像头失败:', error);
+                // 如果无法访问后置摄像头，尝试前置摄像头
+                if (cameraMode === 'environment') {
+                    alert('无法访问后置摄像头，尝试使用前置摄像头...');
+                    currentCameraMode = 'user';
+                    await startCamera(currentCameraMode);
+                } else {
+                    alert('无法访问摄像头，请检查浏览器权限设置。');
+                }
+            }
+        }
+
+        // 拍照并处理（保持原有代码）
+        function capturePhoto(videoElement, modalElement) {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+
+            const context = canvas.getContext('2d');
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    currentCapturedPhotoBlob = blob;
+                    showPhotoMobilePreview(blob);
+                }
+                closeCamera(modalElement);
+            }, 'image/jpeg', 0.9);
+        }
+
+        // 显示照片移动端预览（保持原有代码）
+        function showPhotoMobilePreview(blob) {
+            // 创建预览URL
+            const imageUrl = URL.createObjectURL(blob);
+            imageMobileThumbnail.src = imageUrl;
+
+            // 显示移动预览
+            const imagePlaceholder = document.querySelector('#imageUploadBox .upload-placeholder');
+            imagePlaceholder.style.display = 'none';
+            imagePreview.style.display = 'none';
+            imageMobilePreview.style.display = 'flex';
+        }
+
+        // 重新拍摄照片（保持原有代码）
+        function retryPhotoCapture() {
+            // 隐藏移动预览
+            imageMobilePreview.style.display = 'none';
+
+            // 显示原始按钮
+            const imagePlaceholder = document.querySelector('#imageUploadBox .upload-placeholder');
+            imagePlaceholder.style.display = 'flex';
+
+            // 重置状态
+            if (imageMobileThumbnail.src.startsWith('blob:')) {
+                URL.revokeObjectURL(imageMobileThumbnail.src);
+            }
+            currentCapturedPhotoBlob = null;
+            selectedImage = null;
+            imageMobileThumbnail.src = '';
+            checkUploadButton();
+        }
+
+        // 确认使用拍摄的照片（保持原有代码）
+        function confirmPhotoCapture() {
+            if (!currentCapturedPhotoBlob) {
+                alert('请先拍摄照片');
+                return;
+            }
+
+            // 将照片转换为文件
+            const photoFile = new File([currentCapturedPhotoBlob], `photo_${Date.now()}.jpg`, {
+                type: 'image/jpeg'
+            });
+
+            // 处理图片文件
+            processImageFile(photoFile);
+        }
+
+        // 关闭摄像头（保持原有代码）
+        function closeCamera(modalElement) {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            if (modalElement && modalElement.parentNode) {
+                modalElement.parentNode.removeChild(modalElement);
+            }
+        }
+
+        // ==================== 上传函数（添加iOS优化）====================
+        async function handleUpload() {
+            const client = supabaseClient;
+            let uploadAudio = selectedAudio !== null;
+            let uploadImage = selectedImage !== null;
+
+            if (!uploadAudio && !uploadImage) {
+                alert('请至少选择一个文件上传。');
+                return;
+            }
+
+            const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5MB
+            const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+
+            if (uploadAudio && selectedAudio.size > MAX_AUDIO_SIZE) {
+                alert(`音频文件大小请控制在5MB以内。`);
+                return;
+            }
+            if (uploadImage && selectedImage.size > MAX_IMAGE_SIZE) {
+                alert(`图片文件大小请控制在2MB以内。`);
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '处理中...';
+            let uploadSuccess = { audio: false, image: false };
+
+            try {
+                console.log(`开始为用户 ${assignedUserId} 处理文件...`);
+
+                // 1. 图片处理
+                if (uploadImage) {
+                    uploadBtn.textContent = '正在上传图片...';
+                    const { error: imageError } = await client.storage
+                        .from('love-letters')
+                        .upload(`${assignedUserId}/image.jpg`, selectedImage, {
+                            upsert: true,
+                            cacheControl: 'public, max-age=31536000'
+                        });
+                    if (imageError) throw new Error(`图片上传失败: ${imageError.message}`);
+                    uploadSuccess.image = true;
+                    console.log('✅ 图片上传成功');
+                }
+
+                // 2. 音频处理
+                if (uploadAudio) {
+                    uploadBtn.textContent = '正在处理音频...';
+
+                    // iOS设备使用简化转换
+                    const finalAudioFile = await convertAudioToMP3(selectedAudio);
+
+                    uploadBtn.textContent = '正在上传音频...';
+                    const { error: audioError } = await client.storage
+                        .from('love-letters')
+                        .upload(`${assignedUserId}/audio.mp3`, finalAudioFile, {
+                            upsert: true,
+                            cacheControl: 'public, max-age=31536000',
+                            contentType: 'audio/mpeg'
+                        });
+                    if (audioError) throw new Error(`音频上传失败: ${audioError.message}`);
+                    uploadSuccess.audio = true;
+                    console.log('✅ 音频上传成功');
+                }
+
+                // 3. 生成成功信息
+                let successText = '';
+                if (uploadSuccess.audio && uploadSuccess.image) {
+                    successText = '声音和图片文件都已上传成功！';
+                } else if (uploadSuccess.audio) {
+                    successText = '声音文件上传成功！';
+                } else if (uploadSuccess.image) {
+                    successText = '图片文件上传成功！';
+                }
+
+                successDetails.textContent = successText;
+                successMessage.style.display = 'block';
+                uploadBtn.textContent = '✅ 上传完成';
+                uploadBtn.style.background = '#00b894';
+                successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // ==================== iOS Safari 优化 ====================
+                if (isIOS()) {
+                    console.log('📱 iOS上传完成，清理资源...');
+
+                    // 延迟清理资源
+                    setTimeout(() => {
+                        iOSMediaSession.cleanup();
+                        iOSRecorder.cleanup();
+                        console.log('🧹 iOS资源清理完成');
+                    }, 100);
+                }
+
+                // ==================== 页面刷新 ====================
+                // 增加刷新延迟，给 iOS 更多时间清理
+                const refreshDelay = isIOS() ? 2000 : 1500;
+
+                setTimeout(() => {
+                    // 刷新前再次清理
+                    if (isIOS()) {
+                        iOSMediaSession.cleanup();
+                        iOSRecorder.cleanup();
+                    }
+
+                    // 使用安全刷新函数
+                    safePageRefresh();
+                }, refreshDelay);
+
+            } catch (error) {
+                console.error('上传过程出错:', error);
+                alert(`上传失败，请重试。\n错误信息: ${error.message}`);
+
+                // 恢复按钮状态
+                uploadBtn.disabled = false;
+                checkUploadButton();
+
+                // 出错时也清理 iOS 资源
+                if (isIOS()) {
+                    setTimeout(() => {
+                        iOSMediaSession.cleanup();
+                        iOSRecorder.cleanup();
+                    }, 100);
+                }
+            }
+        }
+
+        // ==================== 安全页面刷新函数 ====================
+        function safePageRefresh() {
+            if (isIOS()) {
+                // iOS Safari 特殊处理：使用时间戳避免缓存
+                const timestamp = new Date().getTime();
+                const currentUrl = new URL(window.location.href);
+
+                // 移除旧的时间戳参数
+                currentUrl.searchParams.delete('_t');
+
+                // 添加新的时间戳
+                currentUrl.searchParams.set('_t', timestamp);
+
+                // 使用 replace 而不是 reload
+                window.location.replace(currentUrl.toString());
+            } else {
+                // 其他浏览器正常刷新
+                window.location.reload();
+            }
+        }
+
+        // ==================== 重置上传界面 ====================
+        function resetUploadInterface() {
+            // 重置文件选择状态
+            selectedAudio = null;
+            selectedImage = null;
+
+            // 重置音频上传区域
+            audioPreview.style.display = 'none';
+            audioUploadBox.querySelector('.upload-placeholder').style.display = 'flex';
+            audioInput.value = '';
+            audioMobilePreview.style.display = 'none';
+
+            // 重置图片上传区域
+            imagePreview.style.display = 'none';
+            imageUploadBox.querySelector('.upload-placeholder').style.display = 'flex';
+            imageInput.value = '';
+            document.getElementById('imageThumbnail').src = '';
+            imageMobilePreview.style.display = 'none';
+
+            // 清理Blob URL
+            if (imageMobileThumbnail.src.startsWith('blob:')) {
+                URL.revokeObjectURL(imageMobileThumbnail.src);
+                imageMobileThumbnail.src = '';
+            }
+
+            // 重置临时存储
+            currentRecordedAudioBlob = null;
+            currentCapturedPhotoBlob = null;
+
+            // iOS专用清理
+            if (isIOS()) {
+                iOSRecorder.cleanup();
+                iOSMediaSession.cleanup();
+            }
+
+            // 重置上传按钮
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '请先选择声音或图片';
+            uploadBtn.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
+
+            // 隐藏成功消息
+            successMessage.style.display = 'none';
+        }
+
+        // ==================== 添加调试信息（仅开发环境）====================
+        if (window.location.hostname.includes('localhost') || window.location.hostname.includes('netlify')) {
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    const debugDiv = document.createElement('div');
+                    debugDiv.style.cssText = `
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                font-size: 12px;
+                z-index: 9999;
+                max-width: 300px;
+                display: ${isIOS() ? 'block' : 'none'};
+            `;
+                    debugDiv.innerHTML = `
+                <div>iOS: ${isIOS() ? '✅' : '❌'}</div>
+                <div>用户: ${assignedUserId || '无'}</div>
+                <button onclick="iOSMediaSession.cleanup(); alert('清理完成')" 
+                    style="margin-top:5px; padding:5px; background:#ff4757; color:white; border:none; border-radius:3px;">
+                    清理iOS资源
+                </button>
+            `;
+                    document.body.appendChild(debugDiv);
+                }, 1000);
+            });
+        }
+    </script>
+</body>
+
+</html>

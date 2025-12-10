@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <!-- 关键Meta标签：移动端优化 -->
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- iOS Safari特定设置 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="播放">
+    <!-- Android Chrome特定设置 -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <!-- 防止缓存，确保每次都是新页面 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <!-- 预连接Supabase，优化连接速度 -->
+    <link rel="preconnect" href="https://ysuzytkxvcoorpvsobqd.supabase.co">
+    <link rel="dns-prefetch" href="https://ysuzytkxvcoorpvsobqd.supabase.co">
+    <title>播放</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        #backgroundImage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .image-loaded {
+            opacity: 1 !important;
+        }
+
+        .audio-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px 10px 30px;
+            z-index: 2;
+            backdrop-filter: blur(10px);
+        }
+
+        #audioPlayer {
+            width: 100%;
+            height: 40px;
+            opacity: 0.9;
+        }
+
+        @supports (padding: max(0px)) {
+            .audio-controls {
+                padding-bottom: max(30px, env(safe-area-inset-bottom));
+            }
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 10px;
+            z-index: 3;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .error {
+            color: #ff6b6b;
+        }
+
+        .play-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 4;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            padding: 20px;
+            cursor: pointer;
+        }
+
+        @media screen and (max-width: 767px) {
+            body {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+
+            #backgroundImage {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading">正在加载...</div>
+    <div class="play-prompt hidden" id="playPrompt">点击播放</div>
+    <img id="backgroundImage" alt="图片" crossorigin="anonymous">
+    <div class="audio-controls">
+        <audio id="audioPlayer" controls loop crossorigin="anonymous">浏览器不支持音频播放</audio>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const supabaseUrl = 'https://ysuzytkxvcoorpvsobqd.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzdXp5dGt4dmNvb3JwdnNvYnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyOTMxMjUsImV4cCI6MjA3OTg2OTEyNX0.mcHqTQmeBFpW8NCCDCAauWAkjNvzOLiGQN5WAhrNC_A';
+        let supabaseClient = null;
+        const DEFAULT_IMAGE = 'https://ysuzytkxvcoorpvsobqd.supabase.co/storage/v1/object/public/love-letters/defaults/default-image.jpg';
+        const DEFAULT_AUDIO = 'https://ysuzytkxvcoorpvsobqd.supabase.co/storage/v1/object/public/love-letters/defaults/default-audio.mp3';
+        const backgroundImage = document.getElementById('backgroundImage');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const loading = document.getElementById('loading');
+        const playPrompt = document.getElementById('playPrompt');
+        let isMediaLoaded = false;
+        let playPromptActive = false;
+        
+        // ==================== 页面状态管理 ====================
+        let pageHiddenTime = null;
+        const MAX_INACTIVE_TIME = 1 * 60 * 1000; // 1分钟后自动刷新（单位：毫秒）
+        let refreshTimer = null;
+        
+        // 检测页面可见性变化
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        function handleVisibilityChange() {
+            if (document.hidden) {
+                // 页面隐藏（用户切换到其他应用或关闭浏览器）
+                pageHiddenTime = Date.now();
+                console.log('页面隐藏，开始计时...');
+                
+                // 停止音频播放
+                if (!audioPlayer.paused) {
+                    audioPlayer.pause();
+                }
+                
+                // 设置定时刷新（5分钟后）
+                refreshTimer = setTimeout(() => {
+                    if (document.hidden) {
+                        console.log('页面已隐藏5分钟，准备刷新');
+                        // 页面处于隐藏状态超过5分钟，刷新页面
+                        window.location.reload();
+                    }
+                }, MAX_INACTIVE_TIME);
+                
+            } else {
+                // 页面恢复可见
+                console.log('页面恢复可见');
+                
+                // 清除刷新定时器
+                if (refreshTimer) {
+                    clearTimeout(refreshTimer);
+                    refreshTimer = null;
+                }
+                
+                // 如果页面隐藏时间超过10秒，自动刷新
+                if (pageHiddenTime && (Date.now() - pageHiddenTime) > 10000) {
+                    console.log('页面隐藏超过30秒，自动刷新');
+                    window.location.reload();
+                    return;
+                }
+                
+                // 如果之前有播放，继续播放
+                if (isMediaLoaded && !audioPlayer.paused) {
+                    audioPlayer.play().catch(e => {
+                        console.log('恢复播放失败:', e);
+                        showPlayPrompt();
+                    });
+                }
+            }
+        }
+        
+        // 监听页面关闭/刷新事件
+        window.addEventListener('beforeunload', function() {
+            // 页面即将关闭，清除定时器
+            if (refreshTimer) {
+                clearTimeout(refreshTimer);
+            }
+            
+            // 停止音频播放
+            if (!audioPlayer.paused) {
+                audioPlayer.pause();
+                audioPlayer.currentTime = 0;
+            }
+        });
+        
+        // 监听页面恢复（浏览器恢复上次会话）
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                // 页面是从缓存中恢复的（浏览器恢复上次会话）
+                console.log('页面从缓存恢复，重新加载');
+                window.location.reload();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', init);
+        async function init() {
+            try {
+                console.log('初始化播放页面...');
+                supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+                // 测试 Supabase 连接
+                const { data, error } = await supabaseClient.storage
+                    .from('love-letters')
+                    .list('', { limit: 1 });
+
+                if (error) {
+                    console.error('Supabase 连接失败:', error);
+                    showError('服务器连接失败，请检查网络');
+                    return;
+                }
+
+                document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+                const urlParams = new URLSearchParams(window.location.search);
+                const userId = urlParams.get('user');
+                if (!userId) { showError('用户ID无效'); return; }
+                await loadMedia(userId);
+                loading.classList.add('hidden');
+                isMediaLoaded = true;
+                tryAutoPlay();
+            } catch (error) {
+                console.error('初始化失败:', error);
+                showError('加载失败，请重试');
+            }
+        }
+
+        async function loadMedia(userId) {
+            console.log('开始加载用户媒体文件:', userId);
+            await Promise.all([loadImage(userId), loadAudio(userId)]);
+            console.log('媒体文件加载完成');
+        }
+
+        async function loadImage(userId) {
+            return new Promise((resolve) => {
+                try {
+                    const userImagePath = `${userId}/image.jpg`;
+                    const userImageUrl = `${supabaseUrl}/storage/v1/object/public/love-letters/${encodeURIComponent(userImagePath)}`;
+                    const timestamp = new Date().getTime();
+                    const imageUrlWithCacheBust = `${userImageUrl}?t=${timestamp}`;
+                    backgroundImage.src = imageUrlWithCacheBust;
+                    const timeoutId = setTimeout(() => {
+                        console.log('图片加载超时，使用默认图片');
+                        backgroundImage.src = DEFAULT_IMAGE + '?t=' + timestamp;
+                        backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                    }, 10000);
+                    backgroundImage.onload = () => {
+                        clearTimeout(timeoutId);
+                        console.log('用户图片加载成功');
+                        backgroundImage.classList.add('image-loaded');
+                        resolve();
+                    };
+                    backgroundImage.onerror = (e) => {
+                        clearTimeout(timeoutId);
+                        console.error('用户图片加载失败:', e);
+                        backgroundImage.src = DEFAULT_IMAGE + '?t=' + new Date().getTime();
+                        backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                        backgroundImage.onerror = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                    };
+                } catch (error) {
+                    console.error('加载图片时出错:', error);
+                    backgroundImage.src = DEFAULT_IMAGE;
+                    backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                }
+            });
+        }
+
+        // ==================== 【优化】loadAudio 函数 ====================
+        async function loadAudio(userId) {
+            return new Promise((resolve) => {
+                console.log(`加载用户 ${userId} 的音频文件`);
+
+                // 首先检查文件是否存在
+                checkAudioExists(userId).then(exists => {
+                    if (!exists) {
+                        console.log('音频文件不存在，使用默认音频');
+                        audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
+                        resolve();
+                        return;
+                    }
+
+                    // 直接使用标准URL（不带download参数）
+                    const audioUrl = `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.mp3?t=${Date.now()}`;
+                    console.log(`尝试加载音频: ${audioUrl}`);
+
+                    // iOS 特殊处理：使用 XHR 预加载音频
+                    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                        preloadAudioForIOS(audioUrl).then(success => {
+                            if (success) {
+                                audioPlayer.src = audioUrl;
+                                console.log('iOS音频预加载成功');
+                                resolve();
+                            } else {
+                                console.log('iOS音频预加载失败，使用默认音频');
+                                audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
+                                resolve();
+                            }
+                        });
+                    } else {
+                        // 非iOS设备使用标准方式
+                        const testAudio = new Audio();
+                        testAudio.crossOrigin = 'anonymous';
+
+                        testAudio.oncanplay = () => {
+                            console.log('音频加载成功');
+                            audioPlayer.src = audioUrl;
+                            resolve();
+                        };
+
+                        testAudio.onerror = () => {
+                            console.log('音频加载失败，使用默认音频');
+                            audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
+                            resolve();
+                        };
+
+                        testAudio.src = audioUrl;
+                    }
+                });
+            });
+        }
+
+        // iOS 特殊预加载函数
+        async function preloadAudioForIOS(audioUrl) {
+            return new Promise((resolve) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', audioUrl, true);
+                xhr.responseType = 'blob';
+
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        const blob = xhr.response;
+                        // 检查是否是有效的音频文件
+                        if (blob.type.startsWith('audio/') && blob.size > 0) {
+                            console.log('iOS音频预加载成功，文件大小:', blob.size, '类型:', blob.type);
+                            resolve(true);
+                        } else {
+                            console.warn('文件不是有效的音频文件');
+                            resolve(false);
+                        }
+                    } else {
+                        console.warn('预加载失败，状态码:', xhr.status);
+                        resolve(false);
+                    }
+                };
+
+                xhr.onerror = function () {
+                    console.warn('预加载请求失败');
+                    resolve(false);
+                };
+
+                xhr.send();
+
+                // 设置超时
+                setTimeout(() => {
+                    if (xhr.readyState !== 4) {
+                        xhr.abort();
+                        console.warn('预加载超时');
+                        resolve(false);
+                    }
+                }, 10000);
+            });
+        }
+
+        // 检查音频文件是否存在
+        async function checkAudioExists(userId) {
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from('love-letters')
+                    .list(userId);
+
+                if (error) {
+                    console.error('检查文件列表失败:', error);
+                    return false;
+                }
+
+                const audioExists = data.some(file =>
+                    file.name === 'audio.mp3' ||
+                    file.name === 'audio.m4a' ||
+                    file.name.startsWith('audio_')
+                );
+
+                console.log(`音频文件${audioExists ? '存在' : '不存在'}`);
+                return audioExists;
+            } catch (error) {
+                console.error('检查音频存在时出错:', error);
+                return false;
+            }
+        }
+        // ==================== loadAudio 函数修改结束 ====================
+
+        function tryAutoPlay() {
+            if (!isMediaLoaded) { console.log('媒体未加载完成，等待...'); return; }
+            console.log('尝试自动播放音频...');
+            audioPlayer.currentTime = 0;
+            const playPromise = audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log('自动播放成功');
+                    if (playPromptActive) { playPrompt.classList.add('hidden'); playPromptActive = false; }
+                }).catch(error => {
+                    console.log('自动播放被阻止:', error);
+                    showPlayPrompt();
+                });
+            } else {
+                try {
+                    audioPlayer.play(); console.log('自动播放成功（旧版浏览器）');
+                    if (playPromptActive) { playPrompt.classList.add('hidden'); playPromptActive = false; }
+                } catch (error) { console.log('自动播放失败:', error); showPlayPrompt(); }
+            }
+        }
+
+        function showPlayPrompt() {
+            playPrompt.classList.remove('hidden'); playPromptActive = true;
+            const playOnClick = () => {
+                audioPlayer.play().then(() => {
+                    console.log('点击播放成功'); playPrompt.classList.add('hidden'); playPromptActive = false;
+                }).catch(e => { console.error('点击播放失败:', e); showError('播放失败，请检查音频文件'); });
+            };
+            playPrompt.removeEventListener('click', playOnClick); document.removeEventListener('touchstart', playOnClick);
+            playPrompt.addEventListener('click', playOnClick, { once: true }); document.addEventListener('touchstart', playOnClick, { once: true });
+            setTimeout(() => { if (playPromptActive) { audioPlayer.play().then(() => { playPrompt.classList.add('hidden'); playPromptActive = false; }); } }, 5000);
+        }
+
+        function showError(message) {
+            loading.textContent = message; loading.classList.remove('hidden'); loading.classList.add('error');
+            if (!playPromptActive) { showPlayPrompt(); }
+            setTimeout(() => { location.reload(); }, 10000);
+        }
+
+        audioPlayer.addEventListener('play', () => { console.log('音频开始播放'); if (playPromptActive) { playPrompt.classList.add('hidden'); playPromptActive = false; } });
+        audioPlayer.addEventListener('error', (e) => { console.error('音频播放错误:', e); if (!playPromptActive) { showPlayPrompt(); } });
+
+        if (/(iPhone|iPod|iPad)/i.test(navigator.userAgent)) {
+            window.addEventListener('load', () => { setTimeout(() => { window.scrollTo(0, 1); }, 100); });
+            document.body.addEventListener('touchmove', (e) => { if (document.body.scrollHeight <= window.innerHeight) { e.preventDefault(); } }, { passive: false });
+        }
+
+        let startY; document.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
+        document.addEventListener('touchmove', (e) => { if (e.touches[0].clientY > startY && window.scrollY === 0) { e.preventDefault(); } }, { passive: false });
+        window.addEventListener('load', () => {
+            console.log('页面完全加载'); console.log('图片源:', backgroundImage.src); console.log('图片完成状态:', backgroundImage.complete);
+            console.log('图片自然尺寸:', backgroundImage.naturalWidth, 'x', backgroundImage.naturalHeight); console.log('音频源:', audioPlayer.src); console.log('音频时长:', audioPlayer.duration);
+        });
+    </script>
+</body>
+
+</html>
