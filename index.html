@@ -621,6 +621,10 @@
         const urlParams = new URLSearchParams(window.location.search);
         const assignedUserId = urlParams.get('user');
 
+        // ===== 替换原来的整个 JavaScript 部分（从第 600 行开始）=====
+
+
+
         // DOM 元素
         const errorContainer = document.getElementById('errorContainer');
         const mainContainer = document.getElementById('mainContainer');
@@ -649,7 +653,7 @@
         let recordTimeout = null;
         const MAX_RECORD_TIME = 60000;
         let currentRecordedAudioBlob = null;
-        let currentAudioStream = null; // 新增：跟踪当前音频流
+        let currentAudioStream = null;
 
         // === 拍照功能相关变量 ===
         let cameraStream = null;
@@ -719,14 +723,11 @@
 
                 try {
                     // iOS Safari 需要明确的用户交互才能请求权限
-                    // 我们创建一个临时的音频上下文来触发权限请求
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     const audioContext = new AudioContext();
 
-                    // 在iOS上，需要用户交互后才能创建音频上下文
                     if (audioContext.state === 'suspended') {
                         console.log('📱 音频上下文被挂起，等待用户交互');
-                        // 我们将在用户点击录音按钮时再处理
                     }
 
                     audioContext.close();
@@ -848,7 +849,7 @@
                         audio: {
                             channelCount: 1,
                             sampleRate: 44100,
-                            echoCancellation: false, // iOS上关闭回声消除可能有更好效果
+                            echoCancellation: false,
                             noiseSuppression: false,
                             autoGainControl: false
                         }
@@ -879,13 +880,12 @@
                         options.mimeType = 'audio/aac';
                         console.log('📱 使用audio/aac格式');
                     } else {
-                        // 回退到默认
                         console.log('📱 使用默认音频格式');
                     }
 
                     // 设置较低的音频比特率，减少iOS处理压力
                     if (options.mimeType) {
-                        options.audioBitsPerSecond = 64000; // 64kbps
+                        options.audioBitsPerSecond = 64000;
                     }
 
                     this.recorder = new MediaRecorder(stream, options);
@@ -904,7 +904,6 @@
 
                         if (this.chunks.length === 0) {
                             console.error('❌ 没有录到音频数据');
-                            // 尝试备用方案：重新获取权限
                             this.retryWithFallback();
                             return;
                         }
@@ -940,7 +939,7 @@
                     };
 
                     // 7. 开始录音
-                    this.recorder.start(250); // 每250ms收集一次数据
+                    this.recorder.start(250);
                     this.isRecording = true;
                     iOSMediaSession.isActive = true;
 
@@ -950,7 +949,6 @@
                 } catch (error) {
                     console.error('🎤 iOS录音启动失败:', error);
 
-                    // 提供具体的错误提示
                     if (error.name === 'NotAllowedError') {
                         alert('麦克风权限被拒绝。请前往「设置」>「Safari浏览器」>「麦克风」，允许此网站使用麦克风。');
                     } else if (error.name === 'NotFoundError') {
@@ -958,7 +956,6 @@
                     } else if (error.name === 'NotReadableError') {
                         alert('麦克风正被其他应用占用。请关闭其他使用麦克风的应用后重试。');
                     } else if (error.name === 'AbortError') {
-                        // iOS Safari特定的中止错误，通常是因为页面切换
                         alert('录音被中断。请保持在当前页面完成录音。');
                     } else {
                         alert('无法访问麦克风: ' + error.message);
@@ -1000,7 +997,6 @@
             }
 
             cleanupStream() {
-                // 延迟清理流，避免立即停止导致数据丢失
                 setTimeout(() => {
                     if (this.stream) {
                         this.stream.getTracks().forEach(track => track.stop());
@@ -1013,7 +1009,6 @@
             async retryWithFallback() {
                 console.log('🔄 尝试备用录音方案...');
 
-                // 尝试使用更简单的配置
                 try {
                     this.cleanup();
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -1022,7 +1017,6 @@
                         audio: true
                     });
 
-                    // 创建简单的录音器
                     const simpleRecorder = new MediaRecorder(simpleStream);
                     const chunks = [];
 
@@ -1041,7 +1035,6 @@
 
                     simpleRecorder.start();
 
-                    // 录制3秒后自动停止
                     setTimeout(() => {
                         if (simpleRecorder.state === 'recording') {
                             simpleRecorder.stop();
@@ -1060,40 +1053,97 @@
         // 创建iOS录音器实例
         const iOSRecorder = new iOSAudioRecorder();
 
-        // ==================== 简化版音频转换函数 ====================
+        // ==================== 音频转换函数 ====================
         async function convertAudioToMP3(audioFile) {
             console.log('🎵 开始音频转换:', audioFile.name);
 
-            // iOS设备直接使用原始文件，避免转换问题
+            // iOS设备使用简化转换
             if (isIOS()) {
-                console.log('📱 iOS设备，跳过复杂转换');
+                console.log('📱 iOS设备，使用简化转换');
 
-                // 检查文件类型，如果是iOS录制的格式，直接返回
-                if (audioFile.type.includes('m4a') || audioFile.type.includes('mp4')) {
-                    console.log('📱 使用iOS原始音频文件');
-                    return audioFile;
-                }
-
-                // 如果不是MP3格式，转换为MP3
-                if (!audioFile.type.includes('mpeg')) {
-                    console.log('📱 iOS非MP3文件，进行简单转换');
-                    try {
-                        const arrayBuffer = await audioFile.arrayBuffer();
-                        const mp3Blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-                        const convertedFile = new File([mp3Blob], `audio_${assignedUserId}.mp3`, {
-                            type: 'audio/mpeg',
+                try {
+                    // 对于iOS录制的文件，尝试保持原格式
+                    if (audioFile.type.includes('m4a') || audioFile.type.includes('mp4') || audioFile.name.includes('m4a')) {
+                        console.log('📱 使用iOS原始音频格式');
+                        // 如果是m4a格式，直接使用，但重命名为mp3
+                        const renamedFile = new File([audioFile], `audio_${assignedUserId}.m4a`, {
+                            type: 'audio/mp4',
                             lastModified: Date.now()
                         });
-                        return convertedFile;
-                    } catch (error) {
-                        console.error('iOS简单转换失败:', error);
-                        return audioFile;
+                        return renamedFile;
                     }
+
+                    // 对于其他格式，尝试简单转换
+                    console.log('📱 尝试简单音频转换');
+                    const arrayBuffer = await audioFile.arrayBuffer();
+
+                    // 尝试使用lamejs进行转换
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                    const sampleRate = Math.min(44100, audioBuffer.sampleRate);
+                    const bitRate = 128;
+                    const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, bitRate);
+
+                    const channelData = audioBuffer.getChannelData(0);
+                    const sampleBlockSize = 1152;
+                    let mp3Data = [];
+
+                    const convertBuffer = (input) => {
+                        const len = input.length;
+                        const output = new Int16Array(len);
+                        for (let i = 0; i < len; i++) {
+                            const s = Math.max(-1, Math.min(1, input[i]));
+                            output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+                        return output;
+                    };
+
+                    for (let i = 0; i < channelData.length; i += sampleBlockSize) {
+                        const chunk = channelData.subarray(i, i + sampleBlockSize);
+                        const int16Data = convertBuffer(chunk);
+                        const mp3Chunk = mp3Encoder.encodeBuffer(int16Data);
+                        if (mp3Chunk.length > 0) {
+                            mp3Data.push(new Int8Array(mp3Chunk));
+                        }
+                    }
+
+                    const finalChunk = mp3Encoder.flush();
+                    if (finalChunk.length > 0) {
+                        mp3Data.push(new Int8Array(finalChunk));
+                    }
+
+                    const totalLength = mp3Data.reduce((acc, chunk) => acc + chunk.length, 0);
+                    const mergedArray = new Int8Array(totalLength);
+                    let offset = 0;
+                    for (const chunk of mp3Data) {
+                        mergedArray.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+
+                    const mp3Blob = new Blob([mergedArray.buffer], { type: 'audio/mpeg' });
+                    const convertedFile = new File([mp3Blob], `audio_${assignedUserId}.mp3`, {
+                        type: 'audio/mpeg',
+                        lastModified: Date.now()
+                    });
+
+                    console.log('✅ iOS音频转换成功！大小:', (convertedFile.size / 1024).toFixed(2), 'KB');
+                    return convertedFile;
+
+                } catch (error) {
+                    console.error('iOS音频转换失败:', error);
+
+                    // 备用方案：直接上传原始文件
+                    const safeFile = new File([audioFile], `audio_${assignedUserId}_original.${audioFile.name.split('.').pop() || 'webm'}`, {
+                        type: audioFile.type,
+                        lastModified: Date.now()
+                    });
+
+                    return safeFile;
                 }
-                return audioFile;
             }
 
-            // 非iOS设备使用原有转换逻辑
+            // 非iOS设备使用标准转换逻辑
             try {
                 const arrayBuffer = await audioFile.arrayBuffer();
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1161,97 +1211,6 @@
             }
         }
 
-        // ==================== 标准音频转换函数 ====================
-        async function convertAudioToMP3(audioFile) {
-            if (isIOS()) {
-                return await convertAudioToMP3_iOS(audioFile);
-            }
-
-            // 非iOS设备使用标准转换逻辑
-            console.log('开始标准音频转换:', audioFile.name, '类型:', audioFile.type);
-
-            try {
-                const arrayBuffer = await audioFile.arrayBuffer();
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                window.mediaResources.audioContexts.push(audioContext);
-
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-                const sampleRate = Math.min(44100, audioBuffer.sampleRate);
-                const bitRate = 128;
-                const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, bitRate);
-
-                const channelData = audioBuffer.getChannelData(0);
-                const sampleBlockSize = 1152;
-                let mp3Data = [];
-
-                // 转换为 Int16Array
-                const convertBuffer = (input) => {
-                    const len = input.length;
-                    const output = new Int16Array(len);
-                    for (let i = 0; i < len; i++) {
-                        const s = Math.max(-1, Math.min(1, input[i]));
-                        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                    }
-                    return output;
-                };
-
-                for (let i = 0; i < channelData.length; i += sampleBlockSize) {
-                    const chunk = channelData.subarray(i, i + sampleBlockSize);
-                    const int16Data = convertBuffer(chunk);
-                    const mp3Chunk = mp3Encoder.encodeBuffer(int16Data);
-                    if (mp3Chunk.length > 0) {
-                        mp3Data.push(new Int8Array(mp3Chunk));
-                    }
-                }
-
-                const finalChunk = mp3Encoder.flush();
-                if (finalChunk.length > 0) {
-                    mp3Data.push(new Int8Array(finalChunk));
-                }
-
-                const totalLength = mp3Data.reduce((acc, chunk) => acc + chunk.length, 0);
-                const mergedArray = new Int8Array(totalLength);
-                let offset = 0;
-                for (const chunk of mp3Data) {
-                    mergedArray.set(chunk, offset);
-                    offset += chunk.length;
-                }
-
-                const mp3Blob = new Blob([mergedArray.buffer], { type: 'audio/mpeg' });
-                const convertedFile = new File([mp3Blob], `audio_${assignedUserId}.mp3`, {
-                    type: 'audio/mpeg',
-                    lastModified: Date.now()
-                });
-
-                console.log('✅ 音频转换成功！采样率:', sampleRate, 'Hz, 大小:',
-                    (convertedFile.size / 1024).toFixed(2), 'KB');
-
-                // 关闭 AudioContext
-                try {
-                    if (audioContext.state !== 'closed') {
-                        await audioContext.close();
-                        window.mediaResources.audioContexts = window.mediaResources.audioContexts.filter(ctx => ctx !== audioContext);
-                    }
-                } catch (e) {
-                    console.warn('关闭 AudioContext 失败:', e);
-                }
-
-                return convertedFile;
-
-            } catch (error) {
-                console.error('音频转换失败:', error);
-
-                // 备用方案：直接上传原始文件
-                const safeFile = new File([audioFile], `audio_${assignedUserId}_original.${audioFile.name.split('.').pop() || 'webm'}`, {
-                    type: audioFile.type,
-                    lastModified: Date.now()
-                });
-
-                return safeFile;
-            }
-        }
-
         // ==================== 安全验证和页面初始化 ====================
         window.addEventListener('DOMContentLoaded', async function () {
             // 安全校验
@@ -1290,12 +1249,10 @@
                     z-index: 10;
                 }
                 
-                /* 禁用iOS的默认行为 */
                 * {
                     -webkit-tap-highlight-color: transparent;
                 }
                 
-                /* 优化按钮响应 */
                 .mobile-action-btn:active {
                     transform: scale(0.98);
                 }
@@ -1312,7 +1269,6 @@
             // 绑定事件监听器
             const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
             if (!isMobile) {
-                // 桌面端保留原有功能
                 audioUploadBox.addEventListener('click', () => audioInput.click());
                 imageUploadBox.addEventListener('click', () => imageInput.click());
             }
@@ -1323,10 +1279,8 @@
 
             // 添加iOS页面状态监听
             if (isIOS()) {
-                // 当页面重新显示时，清理可能的残留状态
                 document.addEventListener('visibilitychange', () => {
                     if (!document.hidden) {
-                        // 页面重新显示，重置录音按钮状态
                         const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
                         if (recordBtn) {
                             recordBtn.textContent = '录制声音';
@@ -1348,7 +1302,6 @@
                 audioPreview.style.display = 'flex';
                 audioUploadBox.querySelector('.upload-placeholder').style.display = 'none';
 
-                // 移动端隐藏移动预览
                 audioMobilePreview.style.display = 'none';
 
                 checkUploadButton();
@@ -1378,7 +1331,6 @@
             imagePreview.style.display = 'flex';
             imageUploadBox.querySelector('.upload-placeholder').style.display = 'none';
 
-            // 移动端隐藏移动预览
             imageMobilePreview.style.display = 'none';
 
             checkUploadButton();
@@ -1412,22 +1364,18 @@
             if (isMobile) {
                 const audioPlaceholder = document.querySelector('#audioUploadBox .upload-placeholder');
                 if (audioPlaceholder) {
-                    // 移动端：隐藏原始内容，显示麦克风图标
                     audioPlaceholder.querySelector('.icon').style.display = 'none';
                     audioPlaceholder.querySelector('p').style.display = 'none';
                     audioPlaceholder.querySelector('small').style.display = 'none';
 
-                    // 显示放大的麦克风图标
                     const micIconLarge = audioPlaceholder.querySelector('.mic-icon-large');
                     if (micIconLarge) {
                         micIconLarge.style.display = 'block';
                     }
 
-                    // 创建录制按钮
                     const recordBtn = document.createElement('button');
                     recordBtn.className = 'mobile-action-btn';
 
-                    // 创建按钮内容
                     const btnContent = document.createElement('span');
                     btnContent.className = 'record-text';
                     btnContent.textContent = '录制声音';
@@ -1441,7 +1389,6 @@
 
                     audioPlaceholder.appendChild(recordBtn);
 
-                    // 移动端禁用音频上传区域的点击事件（只允许录制按钮）
                     audioUploadBox.style.cursor = 'default';
                 }
             }
@@ -1451,16 +1398,13 @@
         async function toggleRecording() {
             if (!isRecording) {
                 if (isIOS()) {
-                    // iOS专用录音流程
                     console.log('📱 iOS录音开始');
 
-                    // 更新按钮状态
                     const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
                     if (recordBtn) {
                         recordBtn.textContent = '准备中...';
                     }
 
-                    // 检查iOS会话状态
                     if (!(await iOSMediaSession.canStartRecording())) {
                         alert('当前无法开始录音，请确保页面完全显示并保持活跃。');
                         if (recordBtn) {
@@ -1469,10 +1413,8 @@
                         return;
                     }
 
-                    // 短暂延迟，确保UI更新
                     await new Promise(resolve => setTimeout(resolve, 100));
 
-                    // 使用iOS专用录音器
                     const success = await iOSRecorder.start();
 
                     if (success) {
@@ -1481,7 +1423,6 @@
                             recordBtn.textContent = '⏺️ 录音中... 点击停止';
                         }
 
-                        // 设置最大录音时间
                         recordTimeout = setTimeout(() => {
                             if (iOSRecorder.isRecording) {
                                 console.log('⏱️ 达到最大录音时间');
@@ -1523,7 +1464,6 @@
                     mediaRecorder.start();
                     isRecording = true;
 
-                    // 更新录制按钮状态
                     const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
                     if (recordBtn) {
                         recordBtn.textContent = '⏺️ 录音中... 点击停止';
@@ -1535,7 +1475,6 @@
                             isRecording = false;
                             clearTimeout(recordTimeout);
 
-                            // 恢复按钮状态
                             if (recordBtn) {
                                 recordBtn.textContent = '录制声音';
                             }
@@ -1560,7 +1499,6 @@
                     recordTimeout = null;
                 }
 
-                // 恢复按钮状态
                 const recordBtn = document.querySelector('#audioUploadBox .mobile-action-btn .record-text');
                 if (recordBtn) {
                     recordBtn.textContent = '录制声音';
@@ -1578,14 +1516,11 @@
 
         // 重新录制音频
         function retryAudioRecording() {
-            // 隐藏移动预览
             audioMobilePreview.style.display = 'none';
 
-            // 显示原始按钮
             const audioPlaceholder = document.querySelector('#audioUploadBox .upload-placeholder');
             audioPlaceholder.style.display = 'flex';
 
-            // 重置状态
             if (isIOS()) {
                 iOSRecorder.cleanup();
             }
@@ -1601,39 +1536,32 @@
                 return;
             }
 
-            // 将录制的音频转换为文件
             const recordedFile = new File([currentRecordedAudioBlob], `recording_${Date.now()}.${isIOS() ? 'm4a' : 'webm'}`, {
                 type: isIOS() ? 'audio/mp4' : 'audio/webm'
             });
 
-            // 处理音频选择
             handleAudioSelect({ target: { files: [recordedFile] } });
         }
 
         // ==================== 移动端拍照功能 ====================
-        // （保持原有代码，但添加iOS优化）
         function initCameraUI() {
             const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
             if (isMobile) {
                 const imagePlaceholder = document.querySelector('#imageUploadBox .upload-placeholder');
                 if (imagePlaceholder) {
-                    // 移动端：隐藏原始内容，显示相机图标
                     imagePlaceholder.querySelector('.icon').style.display = 'none';
                     imagePlaceholder.querySelector('p').style.display = 'none';
                     imagePlaceholder.querySelector('small').style.display = 'none';
 
-                    // 显示放大的相机图标
                     const cameraIconLarge = imagePlaceholder.querySelector('.camera-icon-large');
                     if (cameraIconLarge) {
                         cameraIconLarge.style.display = 'block';
                     }
 
-                    // 创建拍照按钮
                     const cameraBtn = document.createElement('button');
                     cameraBtn.className = 'mobile-action-btn photo';
 
-                    // 创建按钮内容
                     const btnContent = document.createElement('span');
                     btnContent.className = 'camera-text';
                     btnContent.textContent = '拍照上传';
@@ -1646,22 +1574,18 @@
 
                     imagePlaceholder.appendChild(cameraBtn);
 
-                    // 移动端禁用图片上传区域的点击事件（只允许拍照按钮）
                     imageUploadBox.style.cursor = 'default';
                 }
             }
         }
 
-        // 打开摄像头（添加iOS优化）
         async function openCamera() {
             try {
-                // iOS设备先清理可能存在的媒体会话
                 if (isIOS()) {
                     iOSMediaSession.cleanup();
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
 
-                // 默认使用后置摄像头
                 currentCameraMode = 'environment';
 
                 await startCamera(currentCameraMode);
@@ -1672,9 +1596,7 @@
             }
         }
 
-        // 启动摄像头（保持原有代码）
         async function startCamera(cameraMode) {
-            // 如果已经有视频流，先停止
             if (cameraStream) {
                 cameraStream.getTracks().forEach(track => track.stop());
             }
@@ -1696,58 +1618,45 @@
                 const buttonContainer = document.createElement('div');
                 buttonContainer.className = 'camera-controls';
 
-                // 拍照按钮
                 const captureBtn = document.createElement('button');
                 captureBtn.innerHTML = '📸 拍照';
                 captureBtn.className = 'camera-btn capture-btn';
 
-                // 切换摄像头按钮
                 const switchBtn = document.createElement('button');
                 switchBtn.innerHTML = currentCameraMode === 'environment' ? '🔄 前置摄像头' : '🔄 后置摄像头';
                 switchBtn.className = 'camera-btn switch-camera-btn';
 
-                // 取消按钮
                 const cancelBtn = document.createElement('button');
                 cancelBtn.innerHTML = '取消';
                 cancelBtn.className = 'camera-btn cancel-btn';
 
-                // 添加按钮到容器
                 buttonContainer.appendChild(captureBtn);
                 buttonContainer.appendChild(switchBtn);
                 buttonContainer.appendChild(cancelBtn);
 
-                // 添加到模态框
                 cameraModal.appendChild(video);
                 cameraModal.appendChild(buttonContainer);
                 document.body.appendChild(cameraModal);
 
-                // 拍照按钮点击事件
                 captureBtn.onclick = () => capturePhoto(video, cameraModal);
 
-                // 切换摄像头按钮点击事件
                 switchBtn.onclick = () => {
-                    // 切换摄像头模式
                     currentCameraMode = currentCameraMode === 'environment' ? 'user' : 'environment';
                     switchBtn.innerHTML = currentCameraMode === 'environment' ? '🔄 前置摄像头' : '🔄 后置摄像头';
 
-                    // 重新启动摄像头
                     startCamera(currentCameraMode).then(() => {
-                        // 更新视频源
                         video.srcObject = cameraStream;
 
-                        // 移除旧的模态框
                         if (cameraModal && cameraModal.parentNode) {
                             cameraModal.parentNode.removeChild(cameraModal);
                         }
                     });
                 };
 
-                // 取消按钮点击事件
                 cancelBtn.onclick = () => closeCamera(cameraModal);
 
             } catch (error) {
                 console.error('启动摄像头失败:', error);
-                // 如果无法访问后置摄像头，尝试前置摄像头
                 if (cameraMode === 'environment') {
                     alert('无法访问后置摄像头，尝试使用前置摄像头...');
                     currentCameraMode = 'user';
@@ -1758,7 +1667,6 @@
             }
         }
 
-        // 拍照并处理（保持原有代码）
         function capturePhoto(videoElement, modalElement) {
             const canvas = document.createElement('canvas');
             canvas.width = videoElement.videoWidth;
@@ -1776,29 +1684,22 @@
             }, 'image/jpeg', 0.9);
         }
 
-        // 显示照片移动端预览（保持原有代码）
         function showPhotoMobilePreview(blob) {
-            // 创建预览URL
             const imageUrl = URL.createObjectURL(blob);
             imageMobileThumbnail.src = imageUrl;
 
-            // 显示移动预览
             const imagePlaceholder = document.querySelector('#imageUploadBox .upload-placeholder');
             imagePlaceholder.style.display = 'none';
             imagePreview.style.display = 'none';
             imageMobilePreview.style.display = 'flex';
         }
 
-        // 重新拍摄照片（保持原有代码）
         function retryPhotoCapture() {
-            // 隐藏移动预览
             imageMobilePreview.style.display = 'none';
 
-            // 显示原始按钮
             const imagePlaceholder = document.querySelector('#imageUploadBox .upload-placeholder');
             imagePlaceholder.style.display = 'flex';
 
-            // 重置状态
             if (imageMobileThumbnail.src.startsWith('blob:')) {
                 URL.revokeObjectURL(imageMobileThumbnail.src);
             }
@@ -1808,23 +1709,19 @@
             checkUploadButton();
         }
 
-        // 确认使用拍摄的照片（保持原有代码）
         function confirmPhotoCapture() {
             if (!currentCapturedPhotoBlob) {
                 alert('请先拍摄照片');
                 return;
             }
 
-            // 将照片转换为文件
             const photoFile = new File([currentCapturedPhotoBlob], `photo_${Date.now()}.jpg`, {
                 type: 'image/jpeg'
             });
 
-            // 处理图片文件
             processImageFile(photoFile);
         }
 
-        // 关闭摄像头（保持原有代码）
         function closeCamera(modalElement) {
             if (cameraStream) {
                 cameraStream.getTracks().forEach(track => track.stop());
@@ -1835,7 +1732,7 @@
             }
         }
 
-        // ==================== 上传函数（添加iOS优化）====================
+        // ==================== 上传函数 ====================
         async function handleUpload() {
             const client = supabaseClient;
             let uploadAudio = selectedAudio !== null;
@@ -1846,8 +1743,8 @@
                 return;
             }
 
-            const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5MB
-            const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+            const MAX_AUDIO_SIZE = 5 * 1024 * 1024;
+            const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 
             if (uploadAudio && selectedAudio.size > MAX_AUDIO_SIZE) {
                 alert(`音频文件大小请控制在5MB以内。`);
@@ -1883,7 +1780,7 @@
                 if (uploadAudio) {
                     uploadBtn.textContent = '正在处理音频...';
 
-                    // iOS设备使用简化转换
+                    // 使用 convertAudioToMP3 函数（注意：不是 convertAudioToMP3_iOS）
                     const finalAudioFile = await convertAudioToMP3(selectedAudio);
 
                     uploadBtn.textContent = '正在上传音频...';
@@ -1915,11 +1812,10 @@
                 uploadBtn.style.background = '#00b894';
                 successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                // ==================== iOS Safari 优化 ====================
+                // iOS Safari 优化
                 if (isIOS()) {
                     console.log('📱 iOS上传完成，清理资源...');
 
-                    // 延迟清理资源
                     setTimeout(() => {
                         iOSMediaSession.cleanup();
                         iOSRecorder.cleanup();
@@ -1927,18 +1823,15 @@
                     }, 100);
                 }
 
-                // ==================== 页面刷新 ====================
-                // 增加刷新延迟，给 iOS 更多时间清理
+                // 页面刷新
                 const refreshDelay = isIOS() ? 2000 : 1500;
 
                 setTimeout(() => {
-                    // 刷新前再次清理
                     if (isIOS()) {
                         iOSMediaSession.cleanup();
                         iOSRecorder.cleanup();
                     }
 
-                    // 使用安全刷新函数
                     safePageRefresh();
                 }, refreshDelay);
 
@@ -1946,11 +1839,9 @@
                 console.error('上传过程出错:', error);
                 alert(`上传失败，请重试。\n错误信息: ${error.message}`);
 
-                // 恢复按钮状态
                 uploadBtn.disabled = false;
                 checkUploadButton();
 
-                // 出错时也清理 iOS 资源
                 if (isIOS()) {
                     setTimeout(() => {
                         iOSMediaSession.cleanup();
@@ -1963,69 +1854,55 @@
         // ==================== 安全页面刷新函数 ====================
         function safePageRefresh() {
             if (isIOS()) {
-                // iOS Safari 特殊处理：使用时间戳避免缓存
                 const timestamp = new Date().getTime();
                 const currentUrl = new URL(window.location.href);
 
-                // 移除旧的时间戳参数
                 currentUrl.searchParams.delete('_t');
-
-                // 添加新的时间戳
                 currentUrl.searchParams.set('_t', timestamp);
 
-                // 使用 replace 而不是 reload
                 window.location.replace(currentUrl.toString());
             } else {
-                // 其他浏览器正常刷新
                 window.location.reload();
             }
         }
 
         // ==================== 重置上传界面 ====================
         function resetUploadInterface() {
-            // 重置文件选择状态
             selectedAudio = null;
             selectedImage = null;
 
-            // 重置音频上传区域
             audioPreview.style.display = 'none';
             audioUploadBox.querySelector('.upload-placeholder').style.display = 'flex';
             audioInput.value = '';
             audioMobilePreview.style.display = 'none';
 
-            // 重置图片上传区域
             imagePreview.style.display = 'none';
             imageUploadBox.querySelector('.upload-placeholder').style.display = 'flex';
             imageInput.value = '';
             document.getElementById('imageThumbnail').src = '';
             imageMobilePreview.style.display = 'none';
 
-            // 清理Blob URL
             if (imageMobileThumbnail.src.startsWith('blob:')) {
                 URL.revokeObjectURL(imageMobileThumbnail.src);
                 imageMobileThumbnail.src = '';
             }
 
-            // 重置临时存储
             currentRecordedAudioBlob = null;
             currentCapturedPhotoBlob = null;
 
-            // iOS专用清理
             if (isIOS()) {
                 iOSRecorder.cleanup();
                 iOSMediaSession.cleanup();
             }
 
-            // 重置上传按钮
             uploadBtn.disabled = true;
             uploadBtn.textContent = '请先选择声音或图片';
             uploadBtn.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
 
-            // 隐藏成功消息
             successMessage.style.display = 'none';
         }
 
-        // ==================== 添加调试信息（仅开发环境）====================
+        // ==================== 添加调试信息 ====================
         if (window.location.hostname.includes('localhost') || window.location.hostname.includes('netlify')) {
             window.addEventListener('load', () => {
                 setTimeout(() => {
