@@ -456,6 +456,50 @@
                 font-weight: bold;
                 margin: 0;
             }
+
+            /* 错误页面样式 */
+            .error-container {
+                display: none;
+                text-align: center;
+                max-width: 500px;
+                margin: 0 auto;
+            }
+
+            .error-content {
+                background: white;
+                border-radius: 20px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+                padding: 60px 40px;
+                width: 100%;
+            }
+
+            .error-icon {
+                font-size: 4em;
+                margin-bottom: 25px;
+            }
+
+            .error-text {
+                color: #2d3436;
+                font-size: 1.1em;
+                line-height: 1.6;
+            }
+
+            .error-text strong {
+                font-size: 1.3em;
+                color: #e53e3e;
+                display: block;
+                margin-bottom: 10px;
+            }
+
+            .error-text code {
+                background: #f7fafc;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 0.9em;
+                color: #4a5568;
+                border: 1px solid #e2e8f0;
+            }
         }
 
         /* 桌面端保持原有样式，但隐藏移动端按钮 */
@@ -516,8 +560,8 @@
     <!-- 错误容器（验证失败时显示） -->
     <div class="error-container" id="errorContainer">
         <div class="error-content">
-            <div class="error-icon">⚠️</div>
-            <div class="error-text">
+            <div id="errorIcon" class="error-icon"></div>
+            <div id="errorText" class="error-text">
                 <p>无效的访问链接</p>
                 <p style="margin-top: 10px;">请通过正确的二维码进入本页面</p>
             </div>
@@ -622,7 +666,46 @@
         const assignedUserId = urlParams.get('user');
 
         // ===== 替换原来的整个 JavaScript 部分（从第 600 行开始）=====
+        // ==================== 新增：用户状态检查 ====================
+        async function checkUserStatus() {
+            if (!assignedUserId || !assignedUserId.startsWith('user_')) {
+                return false; // 无效用户ID
+            }
 
+            try {
+                console.log('正在检查用户状态...', assignedUserId);
+
+                // 使用与后台管理系统相同的Supabase配置
+                const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+                // 查询用户状态
+                const { data, error } = await client
+                    .from('user_status')
+                    .select('is_active')
+                    .eq('user_id', assignedUserId)
+                    .single();
+
+                if (error) {
+                    // 如果表不存在或没有记录，可能是旧用户，默认为活跃状态
+                    if (error.code === 'PGRST116') {
+                        console.log('用户状态记录不存在，默认为活跃状态');
+                        return true;
+                    }
+
+                    console.error('查询用户状态失败:', error);
+                    // 出错时默认为活跃，不影响用户体验
+                    return true;
+                }
+
+                console.log('用户状态查询结果:', data);
+                return data.is_active;
+
+            } catch (error) {
+                console.error('检查用户状态时出错:', error);
+                // 出错时默认为活跃，不影响用户体验
+                return true;
+            }
+        }
 
 
         // DOM 元素
@@ -667,6 +750,52 @@
                 /Safari/i.test(ua) &&
                 !/CriOS/i.test(ua) &&
                 !/FxiOS/i.test(ua);
+        }
+
+        // ==================== 新增：显示错误页面 ====================
+        function showErrorPage(icon, title, message) {
+            const errorIcon = document.getElementById('errorIcon');
+            const errorText = document.getElementById('errorText');
+
+            errorIcon.textContent = icon;
+            errorText.innerHTML = `
+        <p><strong>${title}</strong></p>
+        <p style="margin-top: 15px; color: #718096; line-height: 1.5;">${message}</p>
+        <p style="margin-top: 20px; font-size: 0.9em; color: #a0aec0;">
+            用户ID: <code style="background: #edf2f7; padding: 2px 6px; border-radius: 3px;">${assignedUserId || '未知'}</code>
+        </p>
+    `;
+
+            errorContainer.style.display = 'block';
+            mainContainer.style.display = 'none';
+
+            // 添加重试按钮
+            const retryButton = document.createElement('button');
+            retryButton.textContent = '刷新页面重试';
+            retryButton.style.cssText = `
+        margin-top: 25px;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    `;
+            retryButton.onmouseover = function () {
+                this.style.transform = 'translateY(-2px)';
+                this.style.boxShadow = '0 5px 15px rgba(108, 92, 231, 0.3)';
+            };
+            retryButton.onmouseout = function () {
+                this.style.transform = '';
+                this.style.boxShadow = '';
+            };
+            retryButton.onclick = function () {
+                window.location.reload();
+            };
+
+            errorText.appendChild(retryButton);
         }
 
         // ==================== iOS 媒体会话管理器 ====================
@@ -1216,16 +1345,35 @@
             // 安全校验
             if (!assignedUserId || !assignedUserId.startsWith('user_')) {
                 console.error('无效的用户ID参数:', assignedUserId);
-                errorContainer.style.display = 'block';
-                mainContainer.style.display = 'none';
+                showErrorPage('⚠️', '无效的访问链接', '请通过正确的二维码进入本页面');
                 return;
             }
 
-            // 验证通过，显示主容器，隐藏错误容器
-            errorContainer.style.display = 'none';
-            mainContainer.style.display = 'block';
-
             console.log('当前操作用户ID:', assignedUserId);
+
+            // 首先检查用户状态
+            try {
+                const isUserActive = await checkUserStatus();
+
+                if (!isUserActive) {
+                    // 用户已被禁用
+                    showErrorPage('🚫', '用户已被禁用',
+                        '此用户已被管理员禁用，无法上传新的内容。<br><br>' +
+                        '如需重新启用，请联系系统管理员。'
+                    );
+                    return;
+                }
+
+                // 用户状态正常，继续显示主容器
+                errorContainer.style.display = 'none';
+                mainContainer.style.display = 'block';
+
+            } catch (error) {
+                console.error('检查用户状态失败:', error);
+                // 检查失败时，为了不影响用户体验，仍然显示主容器
+                errorContainer.style.display = 'none';
+                mainContainer.style.display = 'block';
+            }
 
             // 初始化 Supabase 客户端
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1734,6 +1882,18 @@
 
         // ==================== 上传函数 ====================
         async function handleUpload() {
+            // 额外检查：上传前再次验证用户状态
+            try {
+                const isUserActive = await checkUserStatus();
+                if (!isUserActive) {
+                    alert('用户已被禁用，无法上传新内容。');
+                    return;
+                }
+            } catch (error) {
+                console.error('上传前状态检查失败:', error);
+                // 检查失败时继续上传
+            }
+
             const client = supabaseClient;
             let uploadAudio = selectedAudio !== null;
             let uploadImage = selectedImage !== null;
@@ -1902,36 +2062,6 @@
             successMessage.style.display = 'none';
         }
 
-        // ==================== 添加调试信息 ====================
-        if (window.location.hostname.includes('localhost') || window.location.hostname.includes('netlify')) {
-            window.addEventListener('load', () => {
-                setTimeout(() => {
-                    const debugDiv = document.createElement('div');
-                    debugDiv.style.cssText = `
-                position: fixed;
-                top: 10px;
-                left: 10px;
-                background: rgba(0,0,0,0.8);
-                color: white;
-                padding: 10px;
-                border-radius: 5px;
-                font-size: 12px;
-                z-index: 9999;
-                max-width: 300px;
-                display: ${isIOS() ? 'block' : 'none'};
-            `;
-                    debugDiv.innerHTML = `
-                <div>iOS: ${isIOS() ? '✅' : '❌'}</div>
-                <div>用户: ${assignedUserId || '无'}</div>
-                <button onclick="iOSMediaSession.cleanup(); alert('清理完成')" 
-                    style="margin-top:5px; padding:5px; background:#ff4757; color:white; border:none; border-radius:3px;">
-                    清理iOS资源
-                </button>
-            `;
-                    document.body.appendChild(debugDiv);
-                }, 1000);
-            });
-        }
     </script>
 </body>
 
