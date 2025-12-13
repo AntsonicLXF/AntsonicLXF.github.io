@@ -890,13 +890,31 @@
         let currentCameraMode = 'environment';
         let currentCapturedPhotoBlob = null;
 
-        // 初始化时间设置UI
+        // 初始化时间设置UI - 修复版
         function initTimeSettings() {
             const enableTimeLimit = document.getElementById('enableTimeLimit');
             const timeRangeContainer = document.getElementById('timeRangeContainer');
 
+            if (!enableTimeLimit) {
+                console.warn('时间设置元素未找到');
+                return;
+            }
+
             // 加载已有的时间设置
             loadExistingTimeSettings();
+
+            // 添加实时保存功能
+            let saveTimeout;
+            const saveDebounced = () => {
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(async () => {
+                    console.log('时间设置变更，自动保存...');
+                    const saved = await saveTimeSettings();
+                    if (saved) {
+                        console.log('时间设置已自动保存');
+                    }
+                }, 500);
+            };
 
             // 切换显示/隐藏时间设置
             enableTimeLimit.addEventListener('change', function () {
@@ -905,57 +923,125 @@
                 } else {
                     timeRangeContainer.style.display = 'none';
                 }
+                saveDebounced();
             });
+
+            // 监听时间输入变化
+            const startTimeInput = document.getElementById('startTime');
+            const endTimeInput = document.getElementById('endTime');
+
+            if (startTimeInput) {
+                startTimeInput.addEventListener('change', saveDebounced);
+            }
+
+            if (endTimeInput) {
+                endTimeInput.addEventListener('change', saveDebounced);
+            }
         }
 
-        // 加载已有的时间设置
+        // 加载已有的时间设置 - 修复版
         async function loadExistingTimeSettings() {
             if (!supabaseClient || !assignedUserId) return;
 
             try {
+                console.log('加载已有的时间设置...');
+
                 const { data, error } = await supabaseClient
                     .from('user_time_settings')
                     .select('*')
                     .eq('user_id', assignedUserId)
                     .single();
 
-                if (error && error.code !== 'PGRST116') {
+                if (error) {
+                    // 如果没找到记录，这是正常的（用户第一次设置）
+                    if (error.code === 'PGRST116') {
+                        console.log('用户暂无时间设置记录');
+                        return;
+                    }
                     console.error('加载时间设置失败:', error);
                     return;
                 }
 
-                if (data) {
-                    document.getElementById('enableTimeLimit').checked = data.enabled;
-                    if (data.start_time) {
-                        document.getElementById('startTime').value = data.start_time.substring(0, 5);
-                    }
-                    if (data.end_time) {
-                        document.getElementById('endTime').value = data.end_time.substring(0, 5);
-                    }
+                console.log('加载到的时间设置:', data);
 
-                    if (data.enabled) {
-                        document.getElementById('timeRangeContainer').style.display = 'block';
-                    }
+                // 更新UI
+                const enableTimeLimit = document.getElementById('enableTimeLimit');
+                const startTimeInput = document.getElementById('startTime');
+                const endTimeInput = document.getElementById('endTime');
+                const timeRangeContainer = document.getElementById('timeRangeContainer');
+
+                if (enableTimeLimit) {
+                    enableTimeLimit.checked = data.enabled;
                 }
+
+                if (startTimeInput && data.start_time) {
+                    // 转换格式: "HH:MM:SS" -> "HH:MM"
+                    startTimeInput.value = data.start_time.substring(0, 5);
+                }
+
+                if (endTimeInput && data.end_time) {
+                    // 转换格式: "HH:MM:SS" -> "HH:MM"
+                    endTimeInput.value = data.end_time.substring(0, 5);
+                }
+
+                if (timeRangeContainer) {
+                    timeRangeContainer.style.display = data.enabled ? 'block' : 'none';
+                }
+
             } catch (error) {
                 console.error('加载时间设置时出错:', error);
             }
         }
 
-        // 保存时间设置 - 增强版
+        // 保存时间设置 - 修复版
         async function saveTimeSettings() {
             if (!supabaseClient || !assignedUserId) {
                 console.warn('无法保存时间设置: supabaseClient或assignedUserId不存在');
                 return false;
             }
 
-            const enabled = document.getElementById('enableTimeLimit').checked;
-            const startTime = document.getElementById('startTime').value;
-            const endTime = document.getElementById('endTime').value;
+            const enableTimeLimit = document.getElementById('enableTimeLimit');
+            const startTimeInput = document.getElementById('startTime');
+            const endTimeInput = document.getElementById('endTime');
 
-            // 验证时间格式
+            const enabled = enableTimeLimit ? enableTimeLimit.checked : false;
+            const startTime = startTimeInput ? startTimeInput.value : null;
+            const endTime = endTimeInput ? endTimeInput.value : null;
+
+            console.log('保存时间设置:', { enabled, startTime, endTime });
+
+            // 如果用户取消时间限制，需要清除所有时间设置
+            if (!enabled) {
+                try {
+                    console.log('用户取消了时间限制，清除数据库中的时间设置');
+
+                    const { data, error } = await supabaseClient
+                        .from('user_time_settings')
+                        .update({
+                            enabled: false,
+                            start_time: null,
+                            end_time: null,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('user_id', assignedUserId);
+
+                    if (error) {
+                        console.error('清除时间设置失败:', error);
+                        return false;
+                    }
+
+                    console.log('时间限制已成功禁用');
+                    return true;
+                } catch (error) {
+                    console.error('禁用时间限制时出错:', error);
+                    return false;
+                }
+            }
+
+            // 如果启用了时间限制，验证时间格式
             if (enabled && (!startTime || !endTime)) {
                 console.warn('时间设置未完整填写');
+                alert('请完整设置开始和结束时间');
                 return false;
             }
 
@@ -967,16 +1053,18 @@
             }
 
             try {
+                console.log('保存启用状态的时间设置...');
+
                 const { data, error } = await supabaseClient
                     .from('user_time_settings')
                     .upsert({
                         user_id: assignedUserId,
-                        enabled: enabled,
-                        start_time: enabled ? startTime + ':00' : null,
-                        end_time: enabled ? endTime + ':00' : null,
+                        enabled: true,
+                        start_time: startTime + ':00',
+                        end_time: endTime + ':00',
                         updated_at: new Date().toISOString()
                     }, {
-                        onConflict: 'user_id'  // 指定冲突列
+                        onConflict: 'user_id'
                     });
 
                 if (error) {
@@ -987,7 +1075,6 @@
                         error.message.includes('RLS') ||
                         error.code === '42501') {
                         console.error('RLS策略错误，请检查Supabase表设置');
-                        // 继续执行，RLS错误不会影响主要功能
                         return false;
                     }
 

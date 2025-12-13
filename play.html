@@ -275,6 +275,8 @@
             }
 
             try {
+                console.log(`检查用户 ${userId} 的时间限制...`);
+
                 // 查询用户的时间设置
                 const { data, error } = await supabaseClient
                     .from('user_time_settings')
@@ -283,6 +285,12 @@
                     .single();
 
                 if (error) {
+                    // 如果没找到记录或查询失败，默认允许播放
+                    if (error.code === 'PGRST116') {
+                        console.log('用户未设置时间限制，允许播放');
+                        return true;
+                    }
+
                     // 如果是RLS错误，记录但不阻止播放
                     if (error.message.includes('row-level security') ||
                         error.message.includes('RLS') ||
@@ -291,19 +299,21 @@
                         return true;
                     }
 
-                    // 如果没找到记录或查询失败，默认允许播放
-                    if (error.code === 'PGRST116') {
-                        console.log('用户未设置时间限制，允许播放');
-                        return true;
-                    }
-
                     console.error('查询时间设置失败:', error);
                     return true; // 出错时默认允许
                 }
 
-                // 如果没有启用时间限制
-                if (!data || !data.enabled) {
-                    console.log('时间限制未启用，允许播放');
+                console.log('查询到时间设置:', data);
+
+                // 检查 enabled 字段
+                if (!data || data.enabled === false) {
+                    console.log('时间限制未启用 (enabled=false)，允许播放');
+                    return true;
+                }
+
+                // 如果启用了但没有设置时间，也允许播放
+                if (!data.start_time || !data.end_time) {
+                    console.log('时间限制已启用但没有设置时间，允许播放');
                     return true;
                 }
 
@@ -311,19 +321,21 @@
                 const now = new Date();
                 const currentTime = now.getHours() * 60 + now.getMinutes(); // 转换为分钟数
 
-                const startTime = data.start_time ?
-                    (parseInt(data.start_time.substring(0, 2)) * 60 + parseInt(data.start_time.substring(3, 5))) : 0;
-                const endTime = data.end_time ?
-                    (parseInt(data.end_time.substring(0, 2)) * 60 + parseInt(data.end_time.substring(3, 5))) : 1439; // 23:59
+                // 解析开始和结束时间
+                const startTimeParts = data.start_time.split(':');
+                const endTimeParts = data.end_time.split(':');
 
-                console.log(`时间检查: 当前时间 ${now.getHours()}:${now.getMinutes()}, 允许时间段 ${startTime / 60}:${startTime % 60} - ${endTime / 60}:${endTime % 60}`);
+                const startTime = parseInt(startTimeParts[0]) * 60 + parseInt(startTimeParts[1]);
+                const endTime = parseInt(endTimeParts[0]) * 60 + parseInt(endTimeParts[1]);
+
+                console.log(`时间检查: 当前时间 ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}, 允许时间段 ${data.start_time} - ${data.end_time}`);
 
                 // 检查是否在时间段内
                 if (currentTime >= startTime && currentTime <= endTime) {
-                    console.log('当前时间在允许范围内，播放用户内容');
+                    console.log('✅ 当前时间在允许范围内，播放用户内容');
                     return true;
                 } else {
-                    console.log('当前时间不在允许范围内，播放默认内容');
+                    console.log('⏰ 当前时间不在允许范围内，播放默认内容');
                     return false;
                 }
 
