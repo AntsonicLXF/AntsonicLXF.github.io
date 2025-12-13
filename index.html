@@ -188,6 +188,121 @@
             margin-bottom: 8px;
         }
 
+        /* 时间设置区域 */
+        .time-settings-box {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: left;
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #2d3436;
+        }
+
+        .time-settings-box h4 {
+            color: #0984e3;
+            margin-bottom: 15px;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .time-setting-item {
+            margin-bottom: 15px;
+        }
+
+        .time-setting-label {
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+        }
+
+        .time-setting-label input[type="checkbox"] {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+        }
+
+        .time-setting-label span {
+            font-weight: bold;
+            color: #2d3436;
+            margin-bottom: 5px;
+        }
+
+        .time-setting-hint {
+            color: #636e72;
+            font-size: 0.85em;
+            margin-top: 3px;
+        }
+
+        .time-range-container {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #dfe6e9;
+        }
+
+        .time-range {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .time-input-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .time-input-group label {
+            font-size: 0.9em;
+            color: #636e72;
+            margin-bottom: 8px;
+        }
+
+        .time-input-group input[type="time"] {
+            padding: 10px 15px;
+            border: 2px solid #74b9ff;
+            border-radius: 10px;
+            font-size: 1em;
+            background: white;
+            min-width: 120px;
+        }
+
+        .time-separator {
+            font-size: 1.5em;
+            color: #636e72;
+            font-weight: bold;
+        }
+
+        .time-setting-note {
+            color: #636e72;
+            font-size: 0.85em;
+            line-height: 1.5;
+            margin-top: 10px;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .time-range {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .time-separator {
+                transform: rotate(90deg);
+            }
+
+            .time-input-group input[type="time"] {
+                width: 180px;
+            }
+        }
+
         /* 成功提示 */
         .success-message {
             background: #d4edda;
@@ -629,6 +744,34 @@
                     </div>
                 </div>
             </div>
+            <!-- 时间限制设置区域 -->
+            <div class="time-settings-box" id="timeSettingsBox">
+                <h4>⏰ 时间限制设置（可选）</h4>
+                <div class="time-setting-item">
+                    <label class="time-setting-label">
+                        <input type="checkbox" id="enableTimeLimit">
+                        <span>启用时间限制</span>
+                        <small class="time-setting-hint">启用后，只在指定时间段内显示您上传的内容</small>
+                    </label>
+                </div>
+                <div class="time-range-container" id="timeRangeContainer" style="display: none;">
+                    <div class="time-range">
+                        <div class="time-input-group">
+                            <label for="startTime">开始时间</label>
+                            <input type="time" id="startTime" value="18:30">
+                        </div>
+                        <div class="time-separator">—</div>
+                        <div class="time-input-group">
+                            <label for="endTime">结束时间</label>
+                            <input type="time" id="endTime" value="18:40">
+                        </div>
+                    </div>
+                    <p class="time-setting-note">
+                        <small>📌 在此时间段内，扫描NFC将看到您上传的内容；其他时间将显示默认内容。</small><br>
+                        <small>⏱️ 时间段为每天重复，基于用户设备的本地时间。</small>
+                    </p>
+                </div>
+            </div>
         </div>
 
         <button id="uploadBtn" class="generate-btn" disabled>
@@ -677,6 +820,10 @@
 
                 // 使用与后台管理系统相同的Supabase配置
                 const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+                // 初始化时间设置
+                initTimeSettings();
 
                 // 查询用户状态
                 const { data, error } = await client
@@ -743,6 +890,117 @@
         let currentCameraMode = 'environment';
         let currentCapturedPhotoBlob = null;
 
+        // 初始化时间设置UI
+        function initTimeSettings() {
+            const enableTimeLimit = document.getElementById('enableTimeLimit');
+            const timeRangeContainer = document.getElementById('timeRangeContainer');
+
+            // 加载已有的时间设置
+            loadExistingTimeSettings();
+
+            // 切换显示/隐藏时间设置
+            enableTimeLimit.addEventListener('change', function () {
+                if (this.checked) {
+                    timeRangeContainer.style.display = 'block';
+                } else {
+                    timeRangeContainer.style.display = 'none';
+                }
+            });
+        }
+
+        // 加载已有的时间设置
+        async function loadExistingTimeSettings() {
+            if (!supabaseClient || !assignedUserId) return;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('user_time_settings')
+                    .select('*')
+                    .eq('user_id', assignedUserId)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') {
+                    console.error('加载时间设置失败:', error);
+                    return;
+                }
+
+                if (data) {
+                    document.getElementById('enableTimeLimit').checked = data.enabled;
+                    if (data.start_time) {
+                        document.getElementById('startTime').value = data.start_time.substring(0, 5);
+                    }
+                    if (data.end_time) {
+                        document.getElementById('endTime').value = data.end_time.substring(0, 5);
+                    }
+
+                    if (data.enabled) {
+                        document.getElementById('timeRangeContainer').style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('加载时间设置时出错:', error);
+            }
+        }
+
+        // 保存时间设置 - 增强版
+        async function saveTimeSettings() {
+            if (!supabaseClient || !assignedUserId) {
+                console.warn('无法保存时间设置: supabaseClient或assignedUserId不存在');
+                return false;
+            }
+
+            const enabled = document.getElementById('enableTimeLimit').checked;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+
+            // 验证时间格式
+            if (enabled && (!startTime || !endTime)) {
+                console.warn('时间设置未完整填写');
+                return false;
+            }
+
+            // 验证开始时间早于结束时间
+            if (enabled && startTime >= endTime) {
+                console.warn('开始时间必须早于结束时间');
+                alert('开始时间必须早于结束时间');
+                return false;
+            }
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('user_time_settings')
+                    .upsert({
+                        user_id: assignedUserId,
+                        enabled: enabled,
+                        start_time: enabled ? startTime + ':00' : null,
+                        end_time: enabled ? endTime + ':00' : null,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'user_id'  // 指定冲突列
+                    });
+
+                if (error) {
+                    console.error('保存时间设置失败:', error);
+
+                    // 如果是RLS错误，提供更详细的提示
+                    if (error.message.includes('row-level security') ||
+                        error.message.includes('RLS') ||
+                        error.code === '42501') {
+                        console.error('RLS策略错误，请检查Supabase表设置');
+                        // 继续执行，RLS错误不会影响主要功能
+                        return false;
+                    }
+
+                    return false;
+                }
+
+                console.log('时间设置保存成功:', data);
+                return true;
+            } catch (error) {
+                console.error('保存时间设置时出错:', error);
+                return false;
+            }
+        }
         // ==================== iOS Safari 检测函数 ====================
         function isIOS() {
             const ua = navigator.userAgent;
@@ -1940,7 +2198,7 @@
                 if (uploadAudio) {
                     uploadBtn.textContent = '正在处理音频...';
 
-                    // 使用 convertAudioToMP3 函数（注意：不是 convertAudioToMP3_iOS）
+                    // 使用 convertAudioToMP3 函数
                     const finalAudioFile = await convertAudioToMP3(selectedAudio);
 
                     uploadBtn.textContent = '正在上传音频...';
@@ -1956,14 +2214,33 @@
                     console.log('✅ 音频上传成功');
                 }
 
-                // 3. 生成成功信息
-                let successText = '';
+                // 3. 保存时间设置
+                const timeSettingsSaved = await saveTimeSettings();
+                if (timeSettingsSaved) {
+                    console.log('✅ 时间设置已保存');
+                }
+
+                // 4. 生成成功信息
+                let successText = ''; // 只在这里声明一次
+
+                // 获取时间设置信息
+                let timeSettingInfo = '';
+                const enableTimeLimit = document.getElementById('enableTimeLimit');
+                if (enableTimeLimit && enableTimeLimit.checked) {
+                    const startTime = document.getElementById('startTime').value;
+                    const endTime = document.getElementById('endTime').value;
+                    if (startTime && endTime) {
+                        timeSettingInfo = `\n时间限制已设置：${startTime} - ${endTime}`;
+                    }
+                }
+
+                // 根据上传结果生成信息
                 if (uploadSuccess.audio && uploadSuccess.image) {
-                    successText = '声音和图片文件都已上传成功！';
+                    successText = `声音和图片文件都已上传成功！${timeSettingInfo}`;
                 } else if (uploadSuccess.audio) {
-                    successText = '声音文件上传成功！';
+                    successText = `声音文件上传成功！${timeSettingInfo}`;
                 } else if (uploadSuccess.image) {
-                    successText = '图片文件上传成功！';
+                    successText = `图片文件上传成功！${timeSettingInfo}`;
                 }
 
                 successDetails.textContent = successText;

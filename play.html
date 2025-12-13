@@ -157,26 +157,26 @@
         const playPrompt = document.getElementById('playPrompt');
         let isMediaLoaded = false;
         let playPromptActive = false;
-        
+
         // ==================== 页面状态管理 ====================
         let pageHiddenTime = null;
         const MAX_INACTIVE_TIME = 1 * 60 * 1000; // 1分钟后自动刷新（单位：毫秒）
         let refreshTimer = null;
-        
+
         // 检测页面可见性变化
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
+
         function handleVisibilityChange() {
             if (document.hidden) {
                 // 页面隐藏（用户切换到其他应用或关闭浏览器）
                 pageHiddenTime = Date.now();
                 console.log('页面隐藏，开始计时...');
-                
+
                 // 停止音频播放
                 if (!audioPlayer.paused) {
                     audioPlayer.pause();
                 }
-                
+
                 // 设置定时刷新（5分钟后）
                 refreshTimer = setTimeout(() => {
                     if (document.hidden) {
@@ -185,24 +185,24 @@
                         window.location.reload();
                     }
                 }, MAX_INACTIVE_TIME);
-                
+
             } else {
                 // 页面恢复可见
                 console.log('页面恢复可见');
-                
+
                 // 清除刷新定时器
                 if (refreshTimer) {
                     clearTimeout(refreshTimer);
                     refreshTimer = null;
                 }
-                
+
                 // 如果页面隐藏时间超过10秒，自动刷新
                 if (pageHiddenTime && (Date.now() - pageHiddenTime) > 10000) {
                     console.log('页面隐藏超过30秒，自动刷新');
                     window.location.reload();
                     return;
                 }
-                
+
                 // 如果之前有播放，继续播放
                 if (isMediaLoaded && !audioPlayer.paused) {
                     audioPlayer.play().catch(e => {
@@ -212,23 +212,23 @@
                 }
             }
         }
-        
+
         // 监听页面关闭/刷新事件
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             // 页面即将关闭，清除定时器
             if (refreshTimer) {
                 clearTimeout(refreshTimer);
             }
-            
+
             // 停止音频播放
             if (!audioPlayer.paused) {
                 audioPlayer.pause();
                 audioPlayer.currentTime = 0;
             }
         });
-        
+
         // 监听页面恢复（浏览器恢复上次会话）
-        window.addEventListener('pageshow', function(event) {
+        window.addEventListener('pageshow', function (event) {
             if (event.persisted) {
                 // 页面是从缓存中恢复的（浏览器恢复上次会话）
                 console.log('页面从缓存恢复，重新加载');
@@ -267,38 +267,189 @@
             }
         }
 
+        // ==================== 时间限制检查函数 ====================
+        async function checkTimeRestriction(userId) {
+            if (!supabaseClient) {
+                console.log('Supabase客户端未初始化，默认允许播放');
+                return true;
+            }
+
+            try {
+                // 查询用户的时间设置
+                const { data, error } = await supabaseClient
+                    .from('user_time_settings')
+                    .select('enabled, start_time, end_time')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (error) {
+                    // 如果是RLS错误，记录但不阻止播放
+                    if (error.message.includes('row-level security') ||
+                        error.message.includes('RLS') ||
+                        error.code === '42501') {
+                        console.warn('RLS策略错误，默认允许播放:', error.message);
+                        return true;
+                    }
+
+                    // 如果没找到记录或查询失败，默认允许播放
+                    if (error.code === 'PGRST116') {
+                        console.log('用户未设置时间限制，允许播放');
+                        return true;
+                    }
+
+                    console.error('查询时间设置失败:', error);
+                    return true; // 出错时默认允许
+                }
+
+                // 如果没有启用时间限制
+                if (!data || !data.enabled) {
+                    console.log('时间限制未启用，允许播放');
+                    return true;
+                }
+
+                // 检查当前时间是否在允许范围内
+                const now = new Date();
+                const currentTime = now.getHours() * 60 + now.getMinutes(); // 转换为分钟数
+
+                const startTime = data.start_time ?
+                    (parseInt(data.start_time.substring(0, 2)) * 60 + parseInt(data.start_time.substring(3, 5))) : 0;
+                const endTime = data.end_time ?
+                    (parseInt(data.end_time.substring(0, 2)) * 60 + parseInt(data.end_time.substring(3, 5))) : 1439; // 23:59
+
+                console.log(`时间检查: 当前时间 ${now.getHours()}:${now.getMinutes()}, 允许时间段 ${startTime / 60}:${startTime % 60} - ${endTime / 60}:${endTime % 60}`);
+
+                // 检查是否在时间段内
+                if (currentTime >= startTime && currentTime <= endTime) {
+                    console.log('当前时间在允许范围内，播放用户内容');
+                    return true;
+                } else {
+                    console.log('当前时间不在允许范围内，播放默认内容');
+                    return false;
+                }
+
+            } catch (error) {
+                console.error('检查时间限制时出错:', error);
+                return true; // 出错时默认允许
+            }
+        }
+
+        // ==================== 修改loadMedia函数 ====================
         async function loadMedia(userId) {
             console.log('开始加载用户媒体文件:', userId);
-            await Promise.all([loadImage(userId), loadAudio(userId)]);
+
+            // 检查时间限制
+            const isTimeAllowed = await checkTimeRestriction(userId);
+
+            if (isTimeAllowed) {
+                // 时间允许，加载用户内容
+                await Promise.all([loadImage(userId), loadAudio(userId)]);
+                console.log('加载用户自定义内容');
+            } else {
+                // 时间不允许，直接使用默认内容
+                console.log('使用默认内容（时间限制生效）');
+                await loadDefaultContent();
+            }
             console.log('媒体文件加载完成');
+        }
+
+        // 加载默认内容
+        async function loadDefaultContent() {
+            return new Promise((resolve) => {
+                try {
+                    const timestamp = new Date().getTime();
+
+                    // 设置默认图片
+                    backgroundImage.src = DEFAULT_IMAGE + '?t=' + timestamp;
+                    backgroundImage.onload = () => {
+                        backgroundImage.classList.add('image-loaded');
+                        console.log('默认图片加载成功');
+                    };
+
+                    // 设置默认音频
+                    audioPlayer.src = DEFAULT_AUDIO + '?t=' + timestamp;
+
+                    // 如果音频加载失败，使用备用方式
+                    audioPlayer.oncanplay = () => {
+                        console.log('默认音频加载成功');
+                        resolve();
+                    };
+
+                    audioPlayer.onerror = () => {
+                        console.log('默认音频加载失败，尝试备用方案');
+                        // 尝试其他方式加载默认音频
+                        const backupAudio = new Audio(DEFAULT_AUDIO + '?t=' + timestamp);
+                        backupAudio.oncanplay = () => {
+                            audioPlayer.src = backupAudio.src;
+                            console.log('备用默认音频加载成功');
+                            resolve();
+                        };
+                        backupAudio.onerror = () => {
+                            console.log('备用默认音频也失败');
+                            resolve(); // 即使失败也继续
+                        };
+                    };
+
+                    // 设置超时
+                    setTimeout(() => {
+                        console.log('默认内容加载超时，继续');
+                        resolve();
+                    }, 10000);
+
+                } catch (error) {
+                    console.error('加载默认内容时出错:', error);
+                    resolve();
+                }
+            });
         }
 
         async function loadImage(userId) {
             return new Promise((resolve) => {
                 try {
-                    const userImagePath = `${userId}/image.jpg`;
-                    const userImageUrl = `${supabaseUrl}/storage/v1/object/public/love-letters/${encodeURIComponent(userImagePath)}`;
-                    const timestamp = new Date().getTime();
-                    const imageUrlWithCacheBust = `${userImageUrl}?t=${timestamp}`;
-                    backgroundImage.src = imageUrlWithCacheBust;
-                    const timeoutId = setTimeout(() => {
-                        console.log('图片加载超时，使用默认图片');
-                        backgroundImage.src = DEFAULT_IMAGE + '?t=' + timestamp;
-                        backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
-                    }, 10000);
-                    backgroundImage.onload = () => {
-                        clearTimeout(timeoutId);
-                        console.log('用户图片加载成功');
-                        backgroundImage.classList.add('image-loaded');
-                        resolve();
-                    };
-                    backgroundImage.onerror = (e) => {
-                        clearTimeout(timeoutId);
-                        console.error('用户图片加载失败:', e);
-                        backgroundImage.src = DEFAULT_IMAGE + '?t=' + new Date().getTime();
-                        backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
-                        backgroundImage.onerror = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
-                    };
+                    // 检查时间限制（已经在loadMedia中检查过，这里为保险再检查一次）
+                    checkTimeRestriction(userId).then(isAllowed => {
+                        if (!isAllowed) {
+                            // 时间不允许，使用默认图片
+                            const timestamp = new Date().getTime();
+                            backgroundImage.src = DEFAULT_IMAGE + '?t=' + timestamp;
+                            backgroundImage.onload = () => {
+                                backgroundImage.classList.add('image-loaded');
+                                resolve();
+                            };
+                            backgroundImage.onerror = () => {
+                                backgroundImage.classList.add('image-loaded');
+                                resolve();
+                            };
+                            return;
+                        }
+
+                        // 时间允许，加载用户图片（原有逻辑）
+                        const userImagePath = `${userId}/image.jpg`;
+                        const userImageUrl = `${supabaseUrl}/storage/v1/object/public/love-letters/${encodeURIComponent(userImagePath)}`;
+                        const timestamp = new Date().getTime();
+                        const imageUrlWithCacheBust = `${userImageUrl}?t=${timestamp}`;
+                        backgroundImage.src = imageUrlWithCacheBust;
+
+                        const timeoutId = setTimeout(() => {
+                            console.log('用户图片加载超时，使用默认图片');
+                            backgroundImage.src = DEFAULT_IMAGE + '?t=' + timestamp;
+                            backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                        }, 10000);
+
+                        backgroundImage.onload = () => {
+                            clearTimeout(timeoutId);
+                            console.log('用户图片加载成功');
+                            backgroundImage.classList.add('image-loaded');
+                            resolve();
+                        };
+
+                        backgroundImage.onerror = (e) => {
+                            clearTimeout(timeoutId);
+                            console.error('用户图片加载失败:', e);
+                            backgroundImage.src = DEFAULT_IMAGE + '?t=' + new Date().getTime();
+                            backgroundImage.onload = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                            backgroundImage.onerror = () => { backgroundImage.classList.add('image-loaded'); resolve(); };
+                        };
+                    });
                 } catch (error) {
                     console.error('加载图片时出错:', error);
                     backgroundImage.src = DEFAULT_IMAGE;
@@ -312,51 +463,61 @@
             return new Promise((resolve) => {
                 console.log(`加载用户 ${userId} 的音频文件`);
 
-                // 首先检查文件是否存在
-                checkAudioExists(userId).then(exists => {
-                    if (!exists) {
-                        console.log('音频文件不存在，使用默认音频');
+                // 检查时间限制
+                checkTimeRestriction(userId).then(isAllowed => {
+                    if (!isAllowed) {
+                        // 时间不允许，使用默认音频
+                        console.log('时间限制生效，使用默认音频');
                         audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
                         resolve();
                         return;
                     }
-
-                    // 直接使用标准URL（不带download参数）
-                    const audioUrl = `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.mp3?t=${Date.now()}`;
-                    console.log(`尝试加载音频: ${audioUrl}`);
-
-                    // iOS 特殊处理：使用 XHR 预加载音频
-                    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-                        preloadAudioForIOS(audioUrl).then(success => {
-                            if (success) {
-                                audioPlayer.src = audioUrl;
-                                console.log('iOS音频预加载成功');
-                                resolve();
-                            } else {
-                                console.log('iOS音频预加载失败，使用默认音频');
-                                audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
-                                resolve();
-                            }
-                        });
-                    } else {
-                        // 非iOS设备使用标准方式
-                        const testAudio = new Audio();
-                        testAudio.crossOrigin = 'anonymous';
-
-                        testAudio.oncanplay = () => {
-                            console.log('音频加载成功');
-                            audioPlayer.src = audioUrl;
-                            resolve();
-                        };
-
-                        testAudio.onerror = () => {
-                            console.log('音频加载失败，使用默认音频');
+                    // 首先检查文件是否存在
+                    checkAudioExists(userId).then(exists => {
+                        if (!exists) {
+                            console.log('音频文件不存在，使用默认音频');
                             audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
                             resolve();
-                        };
+                            return;
+                        }
 
-                        testAudio.src = audioUrl;
-                    }
+                        // 直接使用标准URL（不带download参数）
+                        const audioUrl = `${supabaseUrl}/storage/v1/object/public/love-letters/${userId}/audio.mp3?t=${Date.now()}`;
+                        console.log(`尝试加载音频: ${audioUrl}`);
+
+                        // iOS 特殊处理：使用 XHR 预加载音频
+                        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                            preloadAudioForIOS(audioUrl).then(success => {
+                                if (success) {
+                                    audioPlayer.src = audioUrl;
+                                    console.log('iOS音频预加载成功');
+                                    resolve();
+                                } else {
+                                    console.log('iOS音频预加载失败，使用默认音频');
+                                    audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
+                                    resolve();
+                                }
+                            });
+                        } else {
+                            // 非iOS设备使用标准方式
+                            const testAudio = new Audio();
+                            testAudio.crossOrigin = 'anonymous';
+
+                            testAudio.oncanplay = () => {
+                                console.log('音频加载成功');
+                                audioPlayer.src = audioUrl;
+                                resolve();
+                            };
+
+                            testAudio.onerror = () => {
+                                console.log('音频加载失败，使用默认音频');
+                                audioPlayer.src = DEFAULT_AUDIO + '?t=' + Date.now();
+                                resolve();
+                            };
+
+                            testAudio.src = audioUrl;
+                        }
+                    });
                 });
             });
         }
