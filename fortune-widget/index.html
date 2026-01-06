@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#8B4513">
+    <title>今日运势 - 黄历助手</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="date-display">
+                <div id="current-date" class="current-date"></div>
+                <div id="lunar-date" class="lunar-date"></div>
+            </div>
+            <h1>📜 今日运势</h1>
+        </header>
+
+        <main class="main-content">
+            <!-- 黄历信息 -->
+            <section class="almanac card">
+                <h2>📅 今日黄历</h2>
+                <div class="almanac-grid">
+                    <div class="item">
+                        <span class="label">宜</span>
+                        <div id="yi-list" class="value auspicious"></div>
+                    </div>
+                    <div class="item">
+                        <span class="label">忌</span>
+                        <div id="ji-list" class="value inauspicious"></div>
+                    </div>
+                    <div class="item">
+                        <span class="label">冲煞</span>
+                        <div id="chongsha" class="value"></div>
+                    </div>
+                    <div class="item">
+                        <span class="label">财神</span>
+                        <div id="caishen" class="value"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 运势卡片 -->
+            <section class="fortune card">
+                <h2>✨ 今日运势</h2>
+                <div class="fortune-grid">
+                    <div class="fortune-item">
+                        <span class="fortune-label">健康</span>
+                        <div class="fortune-bar">
+                            <div id="health-bar" class="bar-fill"></div>
+                        </div>
+                        <span id="health-text" class="fortune-text"></span>
+                    </div>
+                    <div class="fortune-item">
+                        <span class="fortune-label">财运</span>
+                        <div class="fortune-bar">
+                            <div id="wealth-bar" class="bar-fill"></div>
+                        </div>
+                        <span id="wealth-text" class="fortune-text"></span>
+                    </div>
+                    <div class="fortune-item">
+                        <span class="fortune-label">爱情</span>
+                        <div class="fortune-bar">
+                            <div id="love-bar" class="bar-fill"></div>
+                        </div>
+                        <span id="love-text" class="fortune-text"></span>
+                    </div>
+                    <div class="fortune-item">
+                        <span class="fortune-label">工作</span>
+                        <div class="fortune-bar">
+                            <div id="work-bar" class="bar-fill"></div>
+                        </div>
+                        <span id="work-text" class="fortune-text"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 今日提示 -->
+            <section class="tips card">
+                <h2>💡 今日提示</h2>
+                <div id="daily-tips" class="tips-content"></div>
+                <div class="luck">
+                    <div class="luck-item">
+                        <span>幸运数字：</span>
+                        <strong id="lucky-number"></strong>
+                    </div>
+                    <div class="luck-item">
+                        <span>幸运颜色：</span>
+                        <strong id="lucky-color"></strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 免责声明 -->
+            <div class="disclaimer">
+                <p>⚠️ 本运势仅供娱乐参考，切勿过于认真。命运掌握在自己手中，开心最重要！</p>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>扫描 NFC 挂件获取每日运势</p>
+            <p class="update-time">最后更新: <span id="update-time"></span></p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

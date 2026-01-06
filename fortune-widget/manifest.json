@@ -1,0 +1,21 @@
+{
+    "name": "今日运势 - 黄历助手",
+    "short_name": "运势挂件",
+    "description": "每日黄历运势查询，仅供娱乐参考",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f5f7fa",
+    "theme_color": "#8B4513",
+    "icons": [
+        {
+            "src": "icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
